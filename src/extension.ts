@@ -1,26 +1,26 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
+import { MenuViewProvider } from "./providers/MenuViewProvider"
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+  console.log('Congratulations, "extension-test" is now active!');
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "extension-test" is now active!');
+  // Register the original Hello World command
+  const disposable = vscode.commands.registerCommand('extension-test.helloWorld', () => {
+    vscode.window.showInformationMessage('Hello World from extension_test!');
+  });
+  context.subscriptions.push(disposable);
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('extension-test.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from extension_test!');
-	});
-
-	context.subscriptions.push(disposable);
+  // Register the custom webview provider for the activity bar view
+  const provider = new MenuViewProvider(context.extensionUri);
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider('extension-test.menuView', provider)
+  );
 }
 
-// This method is called when your extension is deactivated
+/**
+ * WebviewViewProvider implementation for the activity bar menu
+ */
+
 export function deactivate() {}
