@@ -1,7 +1,7 @@
 {
   "name": "extension-test",
   "displayName": "extension_test",
-  "description": "",
+  "description": "VSCode extension with React webview in activity bar",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.97.0"
@@ -17,14 +17,33 @@
         "command": "extension-test.helloWorld",
         "title": "Hello World"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "extension-test-sidebar",
+          "title": "Extension Test",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "extension-test-sidebar": [
+        {
+          "type": "webview",
+          "id": "extension-test.menuView",
+          "name": "Menu View"
+        }
+      ]
+    }
   },
   "scripts": {
-    "vscode:prepublish": "yarn run compile",
+    "vscode:prepublish": "yarn run compile && yarn run build-webview",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "yarn run compile",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "build-webview": "cd webview-ui && yarn install && yarn build"
   },
   "devDependencies": {
     "@types/vscode": "^1.97.0",
