@@ -1,11 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { MenuViewProvider } from "./providers/MenuViewProvider";
-
-// Import the DiagramEditorProvider from the correct path
-// Make sure this file exists in your project
 import { DiagramEditorProvider } from "./providers/DiagramEditorProvider";
+import { TerraformTreeProvider } from "./providers/TerraformTreeProvider";
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Congratulations, "extension-test" is now active!');
@@ -16,10 +13,46 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(disposable);
 
-  // Register the custom webview provider for the activity bar view
-  const provider = new MenuViewProvider(context.extensionUri);
+  // Create TreeView provider for Terraform files
+  const terraformProvider = new TerraformTreeProvider(context);
+  
+  // Register the TreeView
+  const treeView = vscode.window.createTreeView('extension-test.terraformFiles', {
+    treeDataProvider: terraformProvider,
+    showCollapseAll: true
+  });
+  context.subscriptions.push(treeView);
+  
+  // Register file selection command
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider('extension-test.menuView', provider)
+    vscode.commands.registerCommand('extension-test.selectTerraformFile', (fileUri: vscode.Uri) => {
+      terraformProvider.setSelectedFile(fileUri);
+    })
+  );
+  
+  // Register create diagram command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('extension-test.createDiagramFromSelected', async () => {
+      const selectedFile = terraformProvider.getSelectedFile();
+      
+      if (selectedFile) {
+        try {
+          // Create a new untitled diagram file
+          const fileName = path.basename(selectedFile.fsPath, '.tf');
+          
+          // Create and open a new diagram
+          await vscode.commands.executeCommand('extension-test.createDiagram');
+          
+          // Show a success message
+          vscode.window.showInformationMessage(`Created diagram from ${fileName}.tf`);
+        } catch (error) {
+          console.error('Error creating diagram:', error);
+          vscode.window.showErrorMessage(`Error creating diagram: ${error}`);
+        }
+      } else {
+        vscode.window.showInformationMessage('Please select a Terraform file first');
+      }
+    })
   );
   
   // Register the diagram editor provider

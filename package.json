@@ -1,7 +1,7 @@
 {
   "name": "extension-test",
   "displayName": "extension_test",
-  "description": "VSCode extension with React webview in activity bar",
+  "description": "VSCode extension with native TreeView in activity bar",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.97.0"
@@ -9,9 +9,7 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCustomEditor:extension-test.diagramEditor"
-  ],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -22,6 +20,11 @@
       {
         "command": "extension-test.createDiagram",
         "title": "Create Diagram"
+      },
+      {
+        "command": "extension-test.createDiagramFromSelected",
+        "title": "Create Diagram from Selected File",
+        "icon": "$(add)"
       }
     ],
     "viewsContainers": {
@@ -36,9 +39,17 @@
     "views": {
       "extension-test-sidebar": [
         {
-          "type": "webview",
-          "id": "extension-test.menuView",
-          "name": "Menu View"
+          "id": "extension-test.terraformFiles",
+          "name": "Terraform Files"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "extension-test.createDiagramFromSelected",
+          "when": "view == extension-test.terraformFiles",
+          "group": "navigation"
         }
       ]
     },
@@ -53,33 +64,14 @@
         ],
         "priority": "default"
       }
-    ],
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "extension-test-sidebar",
-          "title": "Extension Test",
-          "icon": "media/icon.svg"
-        }
-      ]
-    },
-    "views": {
-      "extension-test-sidebar": [
-        {
-          "type": "webview",
-          "id": "extension-test.menuView",
-          "name": "Menu View"
-        }
-      ]
-    }
+    ]
   },
   "scripts": {
-    "vscode:prepublish": "yarn run compile && yarn run build-webview && yarn run build-editor",
+    "vscode:prepublish": "yarn run compile && yarn run build-editor",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "yarn run compile",
     "test": "vscode-test",
-    "build-webview": "cd webview-ui && yarn install && yarn build",
     "build-editor": "cd editor-ui && yarn install && yarn build"
   },
   "devDependencies": {
