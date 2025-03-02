@@ -22,6 +22,19 @@ export class MenuViewProvider implements vscode.WebviewViewProvider {
   
       // Set the webview's HTML content
       webviewView.webview.html = this._getWebviewContent(webviewView.webview);
+      // Handle messages from the webview
+      webviewView.webview.onDidReceiveMessage(
+        message => {
+          switch (message.command) {
+            case 'createDiagram':
+              // Execute the createDiagram command
+              vscode.commands.executeCommand('extension-test.createDiagram');
+              return;
+          }
+        },
+        undefined,
+        []
+      );
     }
   
     private _getWebviewContent(webview: vscode.Webview): string {
@@ -92,4 +105,3 @@ export class MenuViewProvider implements vscode.WebviewViewProvider {
       `;
     }
   }
-  

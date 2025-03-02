@@ -9,13 +9,49 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCustomEditor:extension-test.diagramEditor"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "extension-test.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "extension-test.createDiagram",
+        "title": "Create Diagram"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "extension-test-sidebar",
+          "title": "Extension Test",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "extension-test-sidebar": [
+        {
+          "type": "webview",
+          "id": "extension-test.menuView",
+          "name": "Menu View"
+        }
+      ]
+    },
+    "customEditors": [
+      {
+        "viewType": "extension-test.diagramEditor",
+        "displayName": "Diagram Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.diagram"
+          }
+        ],
+        "priority": "default"
       }
     ],
     "viewsContainers": {
@@ -38,12 +74,13 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "yarn run compile && yarn run build-webview",
+    "vscode:prepublish": "yarn run compile && yarn run build-webview && yarn run build-editor",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "yarn run compile",
     "test": "vscode-test",
-    "build-webview": "cd webview-ui && yarn install && yarn build"
+    "build-webview": "cd webview-ui && yarn install && yarn build",
+    "build-editor": "cd editor-ui && yarn install && yarn build"
   },
   "devDependencies": {
     "@types/vscode": "^1.97.0",
