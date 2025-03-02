@@ -18,7 +18,6 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider('extension-test.menuView', provider)
   );
-
   // Register the diagram editor provider
   context.subscriptions.push(
     DiagramEditorProvider.register(context)

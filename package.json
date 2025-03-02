@@ -53,7 +53,25 @@
         ],
         "priority": "default"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "extension-test-sidebar",
+          "title": "Extension Test",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "extension-test-sidebar": [
+        {
+          "type": "webview",
+          "id": "extension-test.menuView",
+          "name": "Menu View"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "yarn run compile && yarn run build-webview && yarn run build-editor",

@@ -22,7 +22,6 @@ export class MenuViewProvider implements vscode.WebviewViewProvider {
   
       // Set the webview's HTML content
       webviewView.webview.html = this._getWebviewContent(webviewView.webview);
-
       // Handle messages from the webview
       webviewView.webview.onDidReceiveMessage(
         message => {
