@@ -1,0 +1,100 @@
+.file-explorer {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-sideBar-background);
+    font-family: var(--vscode-font-family);
+    font-size: 13px;
+}
+
+.explorer-header {
+    padding: 8px 12px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.explorer-header h3 {
+    margin: 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.explorer-content {
+    flex: 1;
+    overflow: auto;
+    padding: 6px 0;
+}
+
+.folder-container {
+    width: 100%;
+}
+
+.folder-item {
+    display: flex;
+    align-items: center;
+    padding: 4px 0;
+    cursor: pointer;
+    user-select: none;
+}
+
+.folder-item:hover {
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+.folder-icon {
+    font-size: 10px;
+    margin-right: 6px;
+    width: 14px;
+    text-align: center;
+}
+
+.folder-name {
+    font-weight: 600;
+}
+
+.folder-contents {
+    margin-left: 0;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    padding: 4px 0;
+    cursor: pointer;
+    user-select: none;
+}
+
+.file-item:hover {
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+.file-item.selected {
+    background-color: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.file-checkbox {
+    margin-right: 6px;
+    pointer-events: none; /* make checkbox part of the row click */
+}
+
+.file-icon {
+    font-size: 10px;
+    margin-right: 6px;
+    color: var(--vscode-symbolIcon-fieldForeground);
+}
+
+.file-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.no-files {
+    padding: 12px;
+    color: var(--vscode-disabledForeground);
+    font-style: italic;
+}
