@@ -2,6 +2,9 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { MenuViewProvider } from "./providers/MenuViewProvider";
+
+// Import the DiagramEditorProvider from the correct path
+// Make sure this file exists in your project
 import { DiagramEditorProvider } from "./providers/DiagramEditorProvider";
 
 export function activate(context: vscode.ExtensionContext) {
@@ -18,6 +21,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider('extension-test.menuView', provider)
   );
+  
   // Register the diagram editor provider
   context.subscriptions.push(
     DiagramEditorProvider.register(context)
