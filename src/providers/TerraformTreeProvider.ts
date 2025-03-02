@@ -31,7 +31,6 @@ export class TerraformTreeProvider implements vscode.TreeDataProvider<TerraformT
   readonly onDidChangeTreeData: vscode.Event<TerraformTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
   
   private fileWatcher: vscode.FileSystemWatcher | undefined;
-  private selectedUri: vscode.Uri | undefined;
 
   constructor(private context: vscode.ExtensionContext) {
     // Watch for .tf file changes
@@ -65,19 +64,8 @@ export class TerraformTreeProvider implements vscode.TreeDataProvider<TerraformT
   }
 
   /**
-   * Set the selected file URI
+   * Refresh the tree without affecting selection
    */
-  setSelectedFile(uri: vscode.Uri | undefined): void {
-    this.selectedUri = uri;
-    this.refresh();
-  }
-
-  /**
-   * Get the selected file URI
-   */
-  getSelectedFile(): vscode.Uri | undefined {
-    return this.selectedUri;
-  }
 
   /**
    * Get the tree item for a given element
@@ -148,7 +136,7 @@ export class TerraformTreeProvider implements vscode.TreeDataProvider<TerraformT
       if (folderPath === '.') {
         // Root level file
         const fileName = path.basename(fileUri.fsPath);
-        const isSelected = this.selectedUri?.toString() === fileUri.toString();
+        // No need to track selection state - VS Code handles it
         
         items.set(fileName, new TerraformTreeItem(
           fileName,
@@ -200,7 +188,6 @@ export class TerraformTreeProvider implements vscode.TreeDataProvider<TerraformT
         }
         
         // Create command to select this file
-        const isSelected = this.selectedUri?.toString() === fileUri.toString();
         
         items.set(fileKey, new TerraformTreeItem(
           fileName,
@@ -260,7 +247,7 @@ export class TerraformTreeProvider implements vscode.TreeDataProvider<TerraformT
     // Add file items
     for (const fileUri of tfFiles) {
       const fileName = path.basename(fileUri.fsPath);
-      const isSelected = this.selectedUri?.toString() === fileUri.toString();
+      // No need to track selection state - VS Code handles it
       
       items.push(new TerraformTreeItem(
         fileName,

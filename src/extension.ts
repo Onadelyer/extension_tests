@@ -16,24 +16,29 @@ export function activate(context: vscode.ExtensionContext) {
   // Create TreeView provider for Terraform files
   const terraformProvider = new TerraformTreeProvider(context);
   
-  // Register the TreeView
+  // Register the TreeView with optimized reveal behavior
   const treeView = vscode.window.createTreeView('extension-test.terraformFiles', {
     treeDataProvider: terraformProvider,
-    showCollapseAll: true
+    showCollapseAll: true,
+    canSelectMany: false
   });
   context.subscriptions.push(treeView);
   
-  // Register file selection command
+  // Register file selection command - but we don't need to manually track selection
   context.subscriptions.push(
     vscode.commands.registerCommand('extension-test.selectTerraformFile', (fileUri: vscode.Uri) => {
-      terraformProvider.setSelectedFile(fileUri);
+      // Selection is handled automatically by TreeView
+      // We don't need to do anything here
     })
   );
   
   // Register create diagram command
   context.subscriptions.push(
     vscode.commands.registerCommand('extension-test.createDiagramFromSelected', async () => {
-      const selectedFile = terraformProvider.getSelectedFile();
+      // Get the selected item from the TreeView directly
+      const selectedItems = treeView.selection;
+      const selectedFile = selectedItems.length > 0 && selectedItems[0].resourceUri ? 
+                           selectedItems[0].resourceUri : undefined;
       
       if (selectedFile) {
         try {
