@@ -1,6 +1,7 @@
 .app-container {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    justify-content: flex-start;
     align-items: center;
     height: 100vh;
     width: 100%;
@@ -10,7 +11,29 @@
     font-family: var(--vscode-font-family);
     background-color: var(--vscode-editor-background);
 }
+
+.button-container {
+    margin-top: 20px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.create-button {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.create-button:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
   
 .placeholder-text {
     font-size: 16px;
+    margin-top: 20px;
 }

@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { MenuViewProvider } from "./providers/MenuViewProvider"
+import { MenuViewProvider } from "./providers/MenuViewProvider";
+import { DiagramEditorProvider } from "./providers/DiagramEditorProvider";
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Congratulations, "extension-test" is now active!');
@@ -17,10 +18,11 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider('extension-test.menuView', provider)
   );
-}
 
-/**
- * WebviewViewProvider implementation for the activity bar menu
- */
+  // Register the diagram editor provider
+  context.subscriptions.push(
+    DiagramEditorProvider.register(context)
+  );
+}
 
 export function deactivate() {}

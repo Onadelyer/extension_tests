@@ -9,3 +9,11 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+editor-ui/src/**
+editor-ui/node_modules/**
+webview-ui/src/**
+webview-ui/node_modules/**
+
+# Don't ignore build folders
+!editor-ui/build/**
+!webview-ui/build/**

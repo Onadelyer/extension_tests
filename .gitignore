@@ -10,3 +10,4 @@ tsconfig.lsif.json
 *.tsbuildinfo
 **/build/
 *.js.map
+**/out/
