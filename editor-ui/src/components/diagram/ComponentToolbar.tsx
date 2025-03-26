@@ -1,5 +1,5 @@
-// editor-ui/src/components/diagram/ComponentToolbar.tsx
 import React, { useState } from 'react';
+import { getAwsIconByType } from '../../assets/aws-icons';
 
 export enum AwsComponentCategory {
   GLOBAL = 'Global',
@@ -16,7 +16,6 @@ export interface ComponentDefinition {
   type: string;
   category: AwsComponentCategory;
   displayName: string;
-  iconPath: string;
   description: string;
 }
 
@@ -35,12 +34,67 @@ const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
   onSelectCategory,
   onSelectComponent
 }) => {
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+
+  if (isCollapsed) {
+    return (
+      <div 
+        className="component-toolbar-collapsed"
+        style={{ 
+          padding: '10px', 
+          borderBottom: '1px solid #ddd',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}
+      >
+        <span>Component Palette</span>
+        <button 
+          onClick={() => setIsCollapsed(false)}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            color: '#0078d4'
+          }}
+        >
+          <span style={{ fontSize: '20px' }}>▼</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="component-toolbar" style={{ borderBottom: '1px solid #ddd', padding: '10px' }}>
-      <div className="category-tabs" style={{ display: 'flex', marginBottom: '10px' }}>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        marginBottom: '10px'
+      }}>
+        <h3 style={{ margin: 0 }}>Component Palette</h3>
+        <button 
+          onClick={() => setIsCollapsed(true)}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            color: '#0078d4'
+          }}
+        >
+          <span style={{ fontSize: '20px' }}>▲</span>
+        </button>
+      </div>
+      
+      <div className="category-tabs" style={{ display: 'flex', marginBottom: '10px', flexWrap: 'wrap' }}>
         <button
           style={{
             marginRight: '5px',
+            marginBottom: '5px',
             padding: '5px 10px',
             backgroundColor: !selectedCategory ? '#0078d4' : '#f0f0f0',
             color: !selectedCategory ? 'white' : 'black',
@@ -58,6 +112,7 @@ const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
             key={category}
             style={{
               marginRight: '5px',
+              marginBottom: '5px',
               padding: '5px 10px',
               backgroundColor: selectedCategory === category ? '#0078d4' : '#f0f0f0',
               color: selectedCategory === category ? 'white' : 'black',
@@ -87,31 +142,40 @@ const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
               key={comp.type}
               className="palette-item"
               style={{
-                padding: '5px',
+                padding: '10px',
                 border: '1px solid #ddd',
-                borderRadius: '3px',
+                borderRadius: '4px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 cursor: 'pointer',
                 width: '80px',
-                height: '80px',
-                justifyContent: 'center',
-                backgroundColor: 'white'
+                height: '90px',
+                justifyContent: 'space-between',
+                backgroundColor: 'white',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                userSelect: 'none'
               }}
               onClick={() => onSelectComponent(comp.type)}
+              onDragStart={(e) => {
+                e.dataTransfer.setData('componentType', comp.type);
+                e.dataTransfer.effectAllowed = 'copy';
+              }}
+              draggable
               title={comp.description}
             >
-              <div style={{ width: '32px', height: '32px', marginBottom: '5px' }}>
-                {/* Placeholder for icon */}
-                <svg width="32" height="32" viewBox="0 0 32 32">
-                  <rect width="32" height="32" fill="#ccc" />
-                  <text x="16" y="20" fontSize="10" textAnchor="middle" fill="#333">
-                    {comp.type.substring(0, 2)}
-                  </text>
-                </svg>
+              <div className="component-icon" style={{ height: '40px', display: 'flex', alignItems: 'center' }}>
+                {getAwsIconByType(comp.type, { size: 36 })}
               </div>
-              <span style={{ fontSize: '12px', textAlign: 'center' }}>{comp.displayName}</span>
+              <span style={{ 
+                fontSize: '12px', 
+                textAlign: 'center', 
+                lineHeight: '1.2',
+                marginTop: '8px'
+              }}>
+                {comp.displayName}
+              </span>
             </div>
           ))}
       </div>
