@@ -1,11 +1,17 @@
+// src/providers/DiagramEditorProvider.ts (updated version)
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { DiagramModel } from '../models/aws/DiagramModel';
+import { AwsComponentRegistry } from '../models/aws/ComponentRegistry';
 
 export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
   private static readonly viewType = 'extension-test.diagramEditor';
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(private readonly context: vscode.ExtensionContext) {
+    // Initialize the AWS component registry
+    AwsComponentRegistry.initialize();
+  }
 
   /**
    * Register the custom editor provider
@@ -71,11 +77,16 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
 
     // Initialize the document if it's empty
     if (document.getText() === '') {
+      // Create an empty diagram model
+      const diagramName = path.basename(document.uri.fsPath, '.diagram');
+      const diagram = new DiagramModel(diagramName || 'New Diagram');
+      
       const edit = new vscode.WorkspaceEdit();
-      edit.insert(document.uri, new vscode.Position(0, 0), JSON.stringify({
-        type: 'diagram',
-        elements: []
-      }, null, 2));
+      edit.insert(
+        document.uri, 
+        new vscode.Position(0, 0), 
+        JSON.stringify(diagram.toJSON(), null, 2)
+      );
       
       // Apply the edit
       await vscode.workspace.applyEdit(edit);
@@ -87,7 +98,7 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
     // Handle text document changes
     const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
       if (e.document.uri.toString() === document.uri.toString()) {
-        // Pass the updated content to the webview if needed
+        // Pass the updated content to the webview
         webviewPanel.webview.postMessage({
           type: 'update',
           content: document.getText()
@@ -98,6 +109,12 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
     // Clean up on panel close
     webviewPanel.onDidDispose(() => {
       changeDocumentSubscription.dispose();
+    });
+
+    // Initial update of the webview with the document contents
+    webviewPanel.webview.postMessage({
+      type: 'update',
+      content: document.getText()
     });
 
     // Handle messages from the webview
@@ -116,6 +133,14 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
               
               await vscode.workspace.applyEdit(edit);
             }
+            return;
+            
+          case 'requestDiagram':
+            // Send the current diagram data to the webview
+            webviewPanel.webview.postMessage({
+              type: 'update',
+              content: document.getText()
+            });
             return;
         }
       }
@@ -171,7 +196,7 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Diagram Editor</title>
+        <title>AWS Diagram Editor</title>
         <style>
           body {
             display: flex;
@@ -187,7 +212,11 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
         </style>
       </head>
       <body>
-        <div>Placeholder</div>
+        <div>
+          <h2>AWS Diagram Editor</h2>
+          <p>The editor is being set up. If you see this message for an extended period, 
+            please ensure you've run the build process for the editor UI.</p>
+        </div>
       </body>
       </html>
     `;
