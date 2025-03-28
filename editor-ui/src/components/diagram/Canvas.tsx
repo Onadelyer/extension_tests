@@ -108,23 +108,17 @@ const DiagramCanvas: React.FC = () => {
           return;
         }
   
-        // Fix: Calculate position correctly by considering scroll position
-        const position = reactFlowInstance.screenToFlowPosition({
+        // The key change: Use the project method instead of screenToFlowPosition
+        // This correctly accounts for the current pan and zoom
+        const position = reactFlowInstance.project({
           x: event.clientX - reactFlowBounds.left,
           y: event.clientY - reactFlowBounds.top
         });
   
-        // Apply any necessary adjustment to correct the offset
-        // You may need to adjust these values based on your specific offset
-        const correctedPosition = {
-          x: position.x,
-          y: position.y
-        };
-  
-        // Snap to grid (20px)
+        // Snap to grid
         const snappedPosition = {
-          x: Math.round(correctedPosition.x / 20) * 20,
-          y: Math.round(correctedPosition.y / 20) * 20
+          x: Math.round(position.x / 20) * 20,
+          y: Math.round(position.y / 20) * 20
         };
   
         // Add the new node
@@ -151,6 +145,9 @@ const DiagramCanvas: React.FC = () => {
         onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move';} }
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        draggable={true}
+        nodesDraggable={true}
+        selectNodesOnDrag={true}
         fitView
         snapToGrid
         snapGrid={[20, 20]}
