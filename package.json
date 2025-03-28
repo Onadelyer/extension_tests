@@ -39,6 +39,7 @@
     "views": {
       "extension-test-sidebar": [
         {
+          "icon": "media/icon.png",
           "id": "extension-test.terraformFiles",
           "name": "Terraform Files"
         }

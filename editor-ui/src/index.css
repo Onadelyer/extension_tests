@@ -1,0 +1,164 @@
+/* Base styles */
+body {
+    margin: 0;
+    font-family: var(--vscode-font-family);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--vscode-editor-background);
+    color: var(--vscode-foreground);
+    overflow: hidden;
+  }
+  
+  .app-container {
+    height: 100vh;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Loading animation */
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* ReactFlow customizations */
+  .react-flow__node {
+    cursor: pointer;
+    transition: box-shadow 0.2s ease;
+  }
+  
+  .react-flow__node.selected {
+    box-shadow: 0 0 0 2px var(--vscode-focusBorder) !important;
+  }
+  
+  .react-flow__node:hover {
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+  }
+  
+  .react-flow__handle {
+    width: 8px;
+    height: 8px;
+    background-color: var(--vscode-editor-foreground);
+    border: 1px solid var(--vscode-panel-border);
+  }
+  
+  .react-flow__handle:hover {
+    background-color: var(--vscode-focusBorder);
+  }
+  
+  .react-flow__edge-path {
+    stroke-width: 1.5;
+  }
+  
+  .react-flow__edge.selected .react-flow__edge-path {
+    stroke: var(--vscode-focusBorder) !important;
+    stroke-width: 2;
+  }
+  
+  .react-flow__controls {
+    background-color: var(--vscode-sideBar-background);
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 4px;
+  }
+  
+  .react-flow__controls-button {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: none;
+    border-radius: 3px;
+    margin: 2px;
+  }
+  
+  .react-flow__controls-button:hover {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+  }
+  
+  /* Mini-map styling */
+  .react-flow__minimap {
+    background-color: var(--vscode-sideBar-background);
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Component toolbar */
+  .component-toolbar {
+    user-select: none;
+  }
+  
+  .component-palette {
+    scrollbar-width: thin;
+  }
+  
+  .component-palette::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .component-palette::-webkit-scrollbar-thumb {
+    background-color: var(--vscode-scrollbarSlider-background);
+    border-radius: 4px;
+  }
+  
+  .component-palette::-webkit-scrollbar-thumb:hover {
+    background-color: var(--vscode-scrollbarSlider-hoverBackground);
+  }
+  
+  .palette-item {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .palette-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    border-color: var(--vscode-focusBorder);
+  }
+  
+  .palette-item:active {
+    transform: translateY(0);
+  }
+  
+  /* Property panel */
+  .property-panel {
+    scrollbar-width: thin;
+  }
+  
+  .property-panel::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  .property-panel::-webkit-scrollbar-thumb {
+    background-color: var(--vscode-scrollbarSlider-background);
+    border-radius: 4px;
+  }
+  
+  .property-panel::-webkit-scrollbar-thumb:hover {
+    background-color: var(--vscode-scrollbarSlider-hoverBackground);
+  }
+  
+  .form-group input:focus,
+  .form-group select:focus,
+  .form-group textarea:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    border-color: var(--vscode-focusBorder);
+  }
+  
+  /* Button styles */
+  button {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+  
+  button:hover {
+    opacity: 0.9;
+  }
+  
+  button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
