@@ -6,8 +6,6 @@ import { v4 as uuidv4 } from 'uuid';
  * Convert from VSCode diagram format to ReactFlow format
  */
 export const diagramToReactFlow = (diagram: DiagramData): { nodes: Node[], edges: Edge[] } => {
-  console.log('Converting diagram to ReactFlow format:', diagram);
-  
   const nodes: Node[] = [];
   const edges: Edge[] = [];
   
@@ -26,9 +24,6 @@ export const diagramToReactFlow = (diagram: DiagramData): { nodes: Node[], edges
     },
     draggable: true  // Add this explicitly
   });
-  
-  console.log('Added region node:', nodes[0]);
-
   // Add child components as nodes
   diagram.region.children.forEach(component => {
     const node = {
@@ -46,7 +41,6 @@ export const diagramToReactFlow = (diagram: DiagramData): { nodes: Node[], edges
       draggable: true  // Add this explicitly
     };
     
-    console.log(`Adding node of type ${component.type}:`, node);
     nodes.push(node);
   });
   

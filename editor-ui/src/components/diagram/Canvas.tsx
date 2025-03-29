@@ -155,10 +155,6 @@ const DiagramCanvas: React.FC = () => {
     [reactFlowInstance, addNode]
   );
 
-  const onInit = (instance: ReactFlowInstance) => {
-    setReactFlowInstance(instance);
-  };
-
   return (
     <div 
       className="diagram-canvas-wrapper" 
@@ -171,12 +167,9 @@ const DiagramCanvas: React.FC = () => {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
-        onInit={onInit}
+        onInit={setReactFlowInstance}
         onDrop={onDrop}
-        onDragOver={(event) => { 
-          event.preventDefault(); 
-          event.dataTransfer.dropEffect = 'move';
-        }}
+        onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move';} }
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         draggable={true}

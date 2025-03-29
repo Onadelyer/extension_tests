@@ -25,16 +25,8 @@ const selectedStyle = {
 };
 
 const EC2Node: React.FC<NodeProps> = ({ id, data, selected, dragging, xPos, yPos }) => {
-  // Add mouse event debugging
-  const handleMouseDown = (e: React.MouseEvent) => {
-    console.log(`Mouse down on EC2Node ${id}`, e);
-  };
-
   return (
-    <div 
-      style={selected ? selectedStyle : nodeStyle}
-      onMouseDown={handleMouseDown}
-    >
+    <div style={selected ? selectedStyle : nodeStyle}>
       <Handle type="target" position={Position.Top} style={{ background: '#555' }} />
       
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
