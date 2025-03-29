@@ -1,7 +1,6 @@
-import React, { memo } from 'react';
+import React, { memo, useEffect } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { EC2Icon } from '../../../assets/aws-icons';
-import useDiagramStore from '../../../store/diagramStore';
 
 // Style for all AWS nodes
 const nodeStyle = {
@@ -25,9 +24,17 @@ const selectedStyle = {
   boxShadow: '0 0 0 2px #0078d4'
 };
 
-const EC2Node: React.FC<NodeProps> = ({ id, data, selected }) => {
+const EC2Node: React.FC<NodeProps> = ({ id, data, selected, dragging, xPos, yPos }) => {
+  // Add mouse event debugging
+  const handleMouseDown = (e: React.MouseEvent) => {
+    console.log(`Mouse down on EC2Node ${id}`, e);
+  };
+
   return (
-    <div style={selected ? selectedStyle : nodeStyle}>
+    <div 
+      style={selected ? selectedStyle : nodeStyle}
+      onMouseDown={handleMouseDown}
+    >
       <Handle type="target" position={Position.Top} style={{ background: '#555' }} />
       
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ReactFlowProvider } from 'reactflow';
+import { ReactFlowProvider, ReactFlowInstance } from 'reactflow';
 import 'reactflow/dist/style.css';
 
 import useDiagramStore from '../../store/diagramStore';

@@ -92,7 +92,7 @@ const useDiagramStore = create<DiagramState>((set, get) => ({
   },
   
   // Update a node
-  updateNode: (nodeId, newData) => {
+  updateNode: (nodeId, newData) => {    
     set(
       produce((state: DiagramState) => {
         const index = state.nodes.findIndex(node => node.id === nodeId);
