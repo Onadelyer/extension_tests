@@ -21,12 +21,12 @@ export const diagramToReactFlow = (diagram: DiagramData): { nodes: Node[], edges
     style: {
       width: diagram.region.size.width,
       height: diagram.region.size.height
-    }
+    },
+    draggable: true  // Add this explicitly
   });
-  
   // Add child components as nodes
   diagram.region.children.forEach(component => {
-    nodes.push({
+    const node = {
       id: component.id,
       type: component.type,
       position: component.position,
@@ -37,8 +37,11 @@ export const diagramToReactFlow = (diagram: DiagramData): { nodes: Node[], edges
       style: {
         width: component.size.width,
         height: component.size.height
-      }
-    });
+      },
+      draggable: true  // Add this explicitly
+    };
+    
+    nodes.push(node);
   });
   
   // Add relationships as edges

@@ -1,7 +1,8 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
+  ReactFlowInstance,
   Controls,
   MiniMap,
   ReactFlowProvider,
@@ -13,6 +14,7 @@ import ReactFlow, {
   EdgeChange,
   Connection,
   applyNodeChanges,
+  XYPosition,
   applyEdgeChanges
 } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -27,6 +29,8 @@ const edgeTypes = {
 };
 
 const DiagramCanvas: React.FC = () => {
+  const [nodePositions, setNodePositions] = useState<Record<string, XYPosition>>({});
+
   const {
     nodes,
     edges,
@@ -51,9 +55,32 @@ const DiagramCanvas: React.FC = () => {
       changes.forEach(change => {
         switch (change.type) {
           case 'position':
-            if (change.position && change.dragging === false) {
-              // Update node position when dragging ends
-              updateNode(change.id, { position: change.position });
+            if (change.dragging && change.position) {
+              // Update our local tracking of positions during drag
+              setNodePositions(prev => ({
+                ...prev,
+                [change.id]: change.position!
+              }));
+            } else if (change.dragging === false) {
+              // When dragging ends, use our locally tracked position
+              const finalPosition = nodePositions[change.id];
+              
+              if (finalPosition) {                
+                // Update the node in our store
+                updateNode(change.id, { position: finalPosition });
+                
+                // Also update node data to keep everything in sync
+                updateNode(change.id, { 
+                  data: { position: finalPosition }
+                });
+                
+                // Clear the tracked position
+                setNodePositions(prev => {
+                  const newState = { ...prev };
+                  delete newState[change.id];
+                  return newState;
+                });
+              }
             }
             break;
           case 'select':
@@ -69,7 +96,7 @@ const DiagramCanvas: React.FC = () => {
         }
       });
     },
-    [updateNode, selectNode, deselectAll, removeNode]
+    [updateNode, selectNode, deselectAll, removeNode, nodePositions]
   );
 
   // Handle edge changes
