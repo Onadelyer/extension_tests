@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { DiagramEditorProvider } from "./providers/DiagramEditorProvider";
 import { TerraformTreeProvider } from "./providers/TerraformTreeProvider";
+import { TerraformParser } from "./parsers/TerraformParser";
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Congratulations, "extension-test" is now active!');
@@ -38,17 +39,32 @@ export function activate(context: vscode.ExtensionContext) {
       // Get the selected item from the TreeView directly
       const selectedItems = treeView.selection;
       const selectedFile = selectedItems.length > 0 && selectedItems[0].resourceUri ? 
-                           selectedItems[0].resourceUri : undefined;
+                          selectedItems[0].resourceUri : undefined;
       
       if (selectedFile) {
         try {
-          // Create a new untitled diagram file
-          const fileName = path.basename(selectedFile.fsPath, '.tf');
+          // Create a new Terraform parser
+          const parser = new TerraformParser();
+          
+          // Log that we're starting analysis
+          console.log(`\n\n=== Analyzing Terraform dependencies for ${selectedFile.fsPath} ===`);
+          
+          // Build the dependency tree
+          const dependencyTree = await parser.buildDependencyTree(selectedFile.fsPath);
+          
+          // Print the dependency tree to the console
+          console.log("\nTerraform Module Dependency Tree:");
+          parser.printDependencyTree(dependencyTree);
+          console.log("=== End of dependency analysis ===\n");
+          
+          // Show a status message to the user
+          vscode.window.showInformationMessage(`Analyzing dependencies in ${path.basename(selectedFile.fsPath)}. Check the Debug Console for results.`);
           
           // Create and open a new diagram
           await vscode.commands.executeCommand('extension-test.createDiagram');
           
           // Show a success message
+          const fileName = path.basename(selectedFile.fsPath, '.tf');
           vscode.window.showInformationMessage(`Created diagram from ${fileName}.tf`);
         } catch (error) {
           console.error('Error creating diagram:', error);
