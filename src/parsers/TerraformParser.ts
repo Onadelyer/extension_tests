@@ -1,176 +1,135 @@
-// src/parsers/TerraformParser.ts
-// This parser analyzes Terraform files to extract module dependencies and build a dependency tree.
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { parse, TerraformConfig, ModuleConfig } from '@evops/hcl-terraform-parser';
+import { parse, TerraformConfig } from '@evops/hcl-terraform-parser';
 
-/**
- * Represents a Terraform module with its dependencies
- */
-export interface ModuleInfo {
-    name: string;
-    source: string;
-    path: string;
-    dependencies: ModuleInfo[];
+export interface FileInfo {
+    path: string;                     // Full path to the file
+    relativePath?: string;            // Path relative to the workspace
+    name: string;                     // Filename
+    isModule?: boolean;               // Whether this file is part of a module
+    moduleSource?: string;            // Source of the module (if applicable)
+    moduleName?: string;              // Name of the module (if applicable)
+    dependencies: FileInfo[];         // Files this file depends on
 }
 
-/**
- * Parser for Terraform files to extract module dependencies
- */
 export class TerraformParser {
-    /**
-     * Parse a Terraform file and extract module information
-     * @param filePath Path to the Terraform file
-     * @returns Information about modules in the file
-     */
-    async parseFile(filePath: string): Promise<ModuleInfo[]> {
-        try {
-            // Check if file exists
-            if (!fs.existsSync(filePath)) {
-                return [];
-            }
-            
-            // Read the file content
-            const content = fs.readFileSync(filePath, 'utf8');
-            
-            // First try the HCL parser
-            let modules: ModuleInfo[] = [];
-            let parserSuccess = false;
-            
-            try {
-                // Parse the HCL content with the library
-                const parsedContent: TerraformConfig = parse(content);
-                
-                // Try to extract modules from the parsed content
-                modules = this.extractModulesFromParsedContent(parsedContent, filePath);
-                
-                if (modules.length > 0) {
-                    parserSuccess = true;
-                }
-            } catch (parseError) {
-                // HCL parser failed, will try regex fallback
-            }
-            
-            // If the HCL parser didn't find any modules, try the regex fallback
-            if (!parserSuccess) {
-                modules = this.parseWithRegex(content, filePath);
-            }
-            
-            return modules;
-        } catch (error) {
-            console.error(`Error parsing Terraform file ${filePath}:`, error);
+    async getAllDependentFileUris(filePath: string): Promise<string[]> {
+        // Check if file exists
+        if (!fs.existsSync(filePath)) {
             return [];
         }
+        
+        // Set to keep track of all unique file paths
+        const allFiles = new Set<string>();
+        
+        // Add the root file
+        allFiles.add(filePath);
+        
+        // Process the root file directory
+        const rootDir = path.dirname(filePath);
+        this.addDirectoryFiles(rootDir, allFiles);
+        
+        // Track visited paths to avoid circular dependencies
+        const visitedPaths = new Set<string>();
+        visitedPaths.add(filePath);
+        
+        // Process modules recursively
+        await this.processFileForUris(filePath, rootDir, allFiles, visitedPaths);
+        
+        // Convert to array and return
+        return Array.from(allFiles);
     }
     
     /**
-     * Extract modules from parsed HCL content
-     * @param parsedContent Parsed HCL content
-     * @param filePath Path to the Terraform file
-     * @returns Information about modules in the file
+     * Process a file to find all module dependencies
+     * @param filePath Path to process
+     * @param basePath Base path for resolving module sources
+     * @param allFiles Set to collect all file paths
+     * @param visitedPaths Set to track visited paths
      */
-    private extractModulesFromParsedContent(parsedContent: TerraformConfig, filePath: string): ModuleInfo[] {
-        const modules: ModuleInfo[] = [];
-        
-        // Handle both old and new parser formats
-        if (parsedContent.module_calls) {
-            // New parser format - using module_calls property
-            for (const [moduleName, moduleConfig] of Object.entries(parsedContent.module_calls)) {
-                // Check if source is available
-                if (moduleConfig && typeof moduleConfig === 'object') {
-                    const typedConfig = moduleConfig as Record<string, unknown>;
-                    if (typedConfig.source && typeof typedConfig.source === 'string') {
-                        modules.push({
-                            name: moduleName,
-                            source: typedConfig.source,
-                            path: filePath,
-                            dependencies: []
-                        });
-                    }
+    private async processFileForUris(
+        filePath: string, 
+        basePath: string, 
+        allFiles: Set<string>,
+        visitedPaths: Set<string>
+    ): Promise<void> {
+        try {
+            // Get module references from the file
+            const moduleRefs = await this.extractModuleReferences(filePath);
+            
+            // Process each module
+            for (const moduleRef of moduleRefs) {
+                // Resolve module path
+                const modulePath = this.resolveModulePath(moduleRef.source, basePath);
+                
+                if (!modulePath) {
+                    continue; // Skip non-resolvable modules
                 }
-            }
-        } else if (parsedContent.module) {
-            // Old parser format - using module property
-            for (const [moduleName, moduleConfig] of Object.entries(parsedContent.module)) {
-                // If moduleConfig is available, process it
-                if (moduleConfig) {
-                    if (Array.isArray(moduleConfig)) {
-                        // Handle array of module definitions
-                        moduleConfig.forEach((config, index) => {
-                            // Type assertion to access properties safely
-                            const typedConfig = config as Record<string, unknown>;
-                            if (typedConfig.source && typeof typedConfig.source === 'string') {
-                                modules.push({
-                                    name: `${moduleName}[${index}]`,
-                                    source: typedConfig.source,
-                                    path: filePath,
-                                    dependencies: []
-                                });
-                            }
-                        });
-                    } else if (typeof moduleConfig === 'object') {
-                        // Handle single module definition
-                        // Type assertion to access properties safely
-                        const typedConfig = moduleConfig as Record<string, unknown>;
-                        if (typedConfig.source && typeof typedConfig.source === 'string') {
-                            modules.push({
-                                name: moduleName,
-                                source: typedConfig.source,
-                                path: filePath,
-                                dependencies: []
-                            });
+                
+                // If module path is a directory, process all files in it
+                if (fs.existsSync(modulePath) && fs.statSync(modulePath).isDirectory()) {
+                    this.addDirectoryFiles(modulePath, allFiles);
+                    
+                    // Process each file in the directory
+                    const moduleFiles = this.findAllTerraformFiles(modulePath);
+                    for (const moduleFile of moduleFiles) {
+                        if (!visitedPaths.has(moduleFile)) {
+                            visitedPaths.add(moduleFile);
+                            await this.processFileForUris(
+                                moduleFile,
+                                path.dirname(moduleFile),
+                                allFiles,
+                                visitedPaths
+                            );
                         }
                     }
+                } else if (modulePath && !visitedPaths.has(modulePath)) {
+                    // It's a file, add it and process it
+                    allFiles.add(modulePath);
+                    visitedPaths.add(modulePath);
+                    await this.processFileForUris(
+                        modulePath,
+                        path.dirname(modulePath),
+                        allFiles,
+                        visitedPaths
+                    );
                 }
             }
+        } catch (error) {
+            console.error(`Error processing file ${filePath}:`, error);
         }
-        
-        return modules;
     }
     
     /**
-     * Parse a Terraform file using a fallback regex approach when the HCL parser fails
-     * @param content Terraform file content
-     * @returns List of module information
+     * Add all Terraform files from a directory to the set
+     * @param dirPath Directory path
+     * @param allFiles Set to collect file paths
      */
-    private parseWithRegex(content: string, filePath: string): ModuleInfo[] {
-        const modules: ModuleInfo[] = [];
-        
-        // Regex to match module blocks: module "name" { ... }
-        // This is a simplified approach and might not handle all Terraform syntax correctly
-        const moduleRegex = /module\s+"([^"]+)"\s+{([^}]*)}/gs;
-        let match;
-        
-        while ((match = moduleRegex.exec(content)) !== null) {
-            const moduleName = match[1];
-            const moduleBody = match[2];
+    private addDirectoryFiles(dirPath: string, allFiles: Set<string>): void {
+        try {
+            const entries = fs.readdirSync(dirPath);
             
-            // Extract source from module body
-            const sourceRegex = /source\s*=\s*"([^"]+)"/;
-            const sourceMatch = moduleBody.match(sourceRegex);
-            
-            if (sourceMatch && sourceMatch[1]) {
-                const source = sourceMatch[1];
-                
-                modules.push({
-                    name: moduleName,
-                    source: source,
-                    path: filePath,
-                    dependencies: []
-                });
+            for (const entry of entries) {
+                if (entry.endsWith('.tf')) {
+                    const fullPath = path.join(dirPath, entry);
+                    if (fs.statSync(fullPath).isFile()) {
+                        allFiles.add(fullPath);
+                    }
+                }
             }
+        } catch (error) {
+            console.error(`Error reading directory ${dirPath}:`, error);
         }
-        
-        return modules;
     }
     
     /**
-     * Build a dependency tree for a Terraform file
+     * Build a dependency tree for a Terraform file including all .tf files
      * @param rootFilePath Path to the root Terraform file
-     * @returns Root module with dependencies
+     * @param workspacePath Optional workspace path for calculating relative paths
+     * @returns Root file with file dependencies
      */
-    async buildDependencyTree(rootFilePath: string): Promise<ModuleInfo> {
+    async buildFileDependencyTree(rootFilePath: string, workspacePath?: string): Promise<FileInfo> {
         // Verify the file exists
         if (!fs.existsSync(rootFilePath)) {
             throw new Error(`File not found: ${rootFilePath}`);
@@ -179,127 +138,258 @@ export class TerraformParser {
         const rootDir = path.dirname(rootFilePath);
         const rootFileName = path.basename(rootFilePath);
         
-        // Create the root module representation
-        const rootModule: ModuleInfo = {
-            name: rootFileName,
-            source: 'root',
+        // Create the root file representation
+        const rootFile: FileInfo = {
             path: rootFilePath,
+            relativePath: workspacePath ? path.relative(workspacePath, rootFilePath) : rootFilePath,
+            name: rootFileName,
             dependencies: []
         };
         
-        // Track visited modules to avoid circular dependencies
+        // Track visited paths to avoid circular dependencies
         const visitedPaths = new Set<string>();
+        visitedPaths.add(rootFilePath); // Mark root file as visited
         
-        // Process the root file
-        await this.processModuleFile(rootModule, rootFilePath, rootDir, visitedPaths);
+        // Add all .tf files from the same directory
+        const directoryFiles = this.findAllTerraformFiles(rootDir);
         
-        return rootModule;
-    }
-    
-    /**
-     * Process a module file to find its dependencies
-     * @param parentModule Parent module to add dependencies to
-     * @param filePath Path to the module file
-     * @param basePath Base path for resolving relative paths
-     * @param visitedPaths Set of already visited paths to avoid circular dependencies
-     */
-    private async processModuleFile(
-        parentModule: ModuleInfo,
-        filePath: string,
-        basePath: string,
-        visitedPaths: Set<string>
-    ): Promise<void> {
-        // Avoid circular dependencies
-        if (visitedPaths.has(filePath)) {
-            return;
-        }
-        
-        visitedPaths.add(filePath);
-        
-        try {
-            // Parse the file to find modules
-            const modules = await this.parseFile(filePath);
-            
-            // Process each module
-            for (const module of modules) {
-                // Create module info
-                const moduleInfo: ModuleInfo = {
-                    name: module.name,
-                    source: module.source,
-                    path: module.path,
+        // Process each file in the directory (except the root file itself)
+        for (const dirFilePath of directoryFiles) {
+            if (dirFilePath !== rootFilePath) { // Skip the root file itself
+                const fileName = path.basename(dirFilePath);
+                
+                // Create file info for this sibling file
+                const fileInfo: FileInfo = {
+                    path: dirFilePath,
+                    relativePath: workspacePath ? path.relative(workspacePath, dirFilePath) : dirFilePath,
+                    name: fileName,
                     dependencies: []
                 };
                 
-                // Add to parent's dependencies
-                parentModule.dependencies.push(moduleInfo);
+                // Add to root file's dependencies
+                rootFile.dependencies.push(fileInfo);
                 
-                // Resolve the module source to a file path
-                const modulePath = this.resolveModulePath(module.source, basePath);
+                // Mark as visited
+                visitedPaths.add(dirFilePath);
+            }
+        }
+        
+        // Process the root file and its modules
+        await this.processFileForTree(rootFile, rootFilePath, rootDir, visitedPaths, workspacePath);
+        
+        return rootFile;
+    }
+    
+    /**
+     * Process a file to build the dependency tree
+     * @param parentFile Parent file to add dependencies to
+     * @param filePath Path to the file
+     * @param basePath Base path for resolving module sources
+     * @param visitedPaths Set to track visited paths
+     * @param workspacePath Optional workspace path for relative paths
+     */
+    private async processFileForTree(
+        parentFile: FileInfo,
+        filePath: string,
+        basePath: string,
+        visitedPaths: Set<string>,
+        workspacePath?: string
+    ): Promise<void> {
+        try {
+            // Extract module references
+            const moduleRefs = await this.extractModuleReferences(filePath);
+            
+            // Process each module reference
+            for (const moduleRef of moduleRefs) {
+                // Resolve module path
+                const modulePath = this.resolveModulePath(moduleRef.source, basePath);
                 
-                if (modulePath) {
-                    // Process the module file to find its dependencies
-                    await this.processModuleFile(
-                        moduleInfo,
+                if (!modulePath) {
+                    continue; // Skip non-resolvable modules
+                }
+                
+                // If module path is a directory, process all files in it
+                if (fs.existsSync(modulePath) && fs.statSync(modulePath).isDirectory()) {
+                    const moduleFiles = this.findAllTerraformFiles(modulePath);
+                    
+                    // Process each file in the directory
+                    for (const moduleFilePath of moduleFiles) {
+                        // Skip already visited files
+                        if (visitedPaths.has(moduleFilePath)) {
+                            continue;
+                        }
+                        
+                        visitedPaths.add(moduleFilePath);
+                        
+                        // Create file info with module metadata
+                        const fileInfo: FileInfo = {
+                            path: moduleFilePath,
+                            relativePath: workspacePath ? path.relative(workspacePath, moduleFilePath) : moduleFilePath,
+                            name: path.basename(moduleFilePath),
+                            isModule: true,
+                            moduleName: moduleRef.name,
+                            moduleSource: moduleRef.source,
+                            dependencies: []
+                        };
+                        
+                        // Add to parent's dependencies
+                        parentFile.dependencies.push(fileInfo);
+                        
+                        // Process this file's dependencies
+                        await this.processFileForTree(
+                            fileInfo,
+                            moduleFilePath,
+                            path.dirname(moduleFilePath),
+                            visitedPaths,
+                            workspacePath
+                        );
+                    }
+                } else if (modulePath && !visitedPaths.has(modulePath)) {
+                    // It's a file
+                    visitedPaths.add(modulePath);
+                    
+                    // Create file info with module metadata
+                    const fileInfo: FileInfo = {
+                        path: modulePath,
+                        relativePath: workspacePath ? path.relative(workspacePath, modulePath) : modulePath,
+                        name: path.basename(modulePath),
+                        isModule: true,
+                        moduleName: moduleRef.name,
+                        moduleSource: moduleRef.source,
+                        dependencies: []
+                    };
+                    
+                    // Add to parent's dependencies
+                    parentFile.dependencies.push(fileInfo);
+                    
+                    // Process this file's dependencies
+                    await this.processFileForTree(
+                        fileInfo,
                         modulePath,
                         path.dirname(modulePath),
-                        visitedPaths
+                        visitedPaths,
+                        workspacePath
                     );
                 }
             }
         } catch (error) {
-            console.error(`Error processing module file ${filePath}:`, error);
+            console.error(`Error processing file ${filePath}:`, error);
         }
     }
     
     /**
-     * Resolve a module source to a file system path
+     * Extract module references from Terraform content
+     * @param filePath Path to the file
+     * @returns Array of module references
+     */
+    private async extractModuleReferences(filePath: string): Promise<{name: string, source: string}[]> {
+        const moduleRefs: {name: string, source: string}[] = [];
+        
+        try {
+            // Read file content
+            const content = fs.readFileSync(filePath, 'utf8');
+            
+            // Try HCL parser first
+            try {
+                const parsedContent = parse(content);
+                
+                // Handle both old and new parser formats
+                if (parsedContent.module_calls) {
+                    // New parser format
+                    for (const [moduleName, moduleConfig] of Object.entries(parsedContent.module_calls)) {
+                        if (moduleConfig && typeof moduleConfig === 'object') {
+                            const typedConfig = moduleConfig as Record<string, unknown>;
+                            if (typedConfig.source && typeof typedConfig.source === 'string') {
+                                moduleRefs.push({
+                                    name: moduleName,
+                                    source: typedConfig.source
+                                });
+                            }
+                        }
+                    }
+                } else if (parsedContent.module) {
+                    // Old parser format
+                    for (const [moduleName, moduleConfig] of Object.entries(parsedContent.module)) {
+                        if (moduleConfig) {
+                            if (Array.isArray(moduleConfig)) {
+                                moduleConfig.forEach((config, index) => {
+                                    const typedConfig = config as Record<string, unknown>;
+                                    if (typedConfig.source && typeof typedConfig.source === 'string') {
+                                        moduleRefs.push({
+                                            name: `${moduleName}[${index}]`,
+                                            source: typedConfig.source
+                                        });
+                                    }
+                                });
+                            } else if (typeof moduleConfig === 'object') {
+                                const typedConfig = moduleConfig as Record<string, unknown>;
+                                if (typedConfig.source && typeof typedConfig.source === 'string') {
+                                    moduleRefs.push({
+                                        name: moduleName,
+                                        source: typedConfig.source
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                // If HCL parser fails, try regex fallback
+                try {
+                    const moduleRegex = /module\s+"([^"]+)"\s+{([^}]*)}/gs;
+                    let match;
+                    
+                    while ((match = moduleRegex.exec(content)) !== null) {
+                        const moduleName = match[1];
+                        const moduleBody = match[2];
+                        
+                        // Extract source from module body
+                        const sourceRegex = /source\s*=\s*"([^"]+)"/;
+                        const sourceMatch = moduleBody.match(sourceRegex);
+                        
+                        if (sourceMatch && sourceMatch[1]) {
+                            moduleRefs.push({
+                                name: moduleName,
+                                source: sourceMatch[1]
+                            });
+                        }
+                    }
+                } catch (regexError) {
+                    // Ignore regex errors
+                }
+            }
+        } catch (error) {
+            console.error(`Error extracting module references from ${filePath}:`, error);
+        }
+        
+        return moduleRefs;
+    }
+    
+    /**
+     * Resolve a module source to a filesystem path
      * @param source Module source string
-     * @param basePath Base path for relative paths
+     * @param basePath Base path for resolving relative paths
      * @returns Resolved path or null if not resolvable
      */
     private resolveModulePath(source: string, basePath: string): string | null {
         // Handle local file paths
         if (source.startsWith('./') || source.startsWith('../') || path.isAbsolute(source) || !source.includes('://')) {
             try {
-                // First, try to resolve as a direct file path
-                let resolvedPath = path.resolve(basePath, source);
+                // Resolve the path
+                const resolvedPath = path.resolve(basePath, source);
                 
-                // Check if resolved path exists
-                if (!fs.existsSync(resolvedPath)) {
+                // Check if it exists
+                if (fs.existsSync(resolvedPath)) {
+                    return resolvedPath;
+                } else {
                     // Try adding .tf extension
-                    if (!resolvedPath.endsWith('.tf')) {
-                        const withExtension = `${resolvedPath}.tf`;
-                        if (fs.existsSync(withExtension)) {
-                            return withExtension;
-                        }
+                    const withTfExt = `${resolvedPath}.tf`;
+                    if (fs.existsSync(withTfExt)) {
+                        return withTfExt;
                     }
-                    
-                    return null;
                 }
-                
-                // If it's a directory, look for main.tf
-                if (fs.statSync(resolvedPath).isDirectory()) {
-                    const mainTfPath = path.join(resolvedPath, 'main.tf');
-                    if (fs.existsSync(mainTfPath)) {
-                        return mainTfPath;
-                    }
-                    
-                    // If main.tf doesn't exist, use the first .tf file
-                    const tfFiles = fs.readdirSync(resolvedPath)
-                        .filter(file => file.endsWith('.tf'));
-                    
-                    if (tfFiles.length > 0) {
-                        return path.join(resolvedPath, tfFiles[0]);
-                    }
-                    
-                    return null;
-                }
-                
-                // It's a file, return it directly
-                return resolvedPath;
             } catch (error) {
                 console.error(`Error resolving module path ${source}:`, error);
-                return null;
             }
         }
         
@@ -308,24 +398,99 @@ export class TerraformParser {
     }
     
     /**
-     * Print a module dependency tree to the console
-     * @param module Root module
-     * @param indent Indentation string for formatting
+     * Find all Terraform files in a directory or return a single file
+     * @param dirOrFilePath Directory or file path
+     * @returns Array of file paths
      */
-    printDependencyTree(module: ModuleInfo, indent: string = ''): void {
-        const sourceSummary = module.source === 'root' 
-            ? module.path 
-            : module.source;
-            
-        console.log(`${indent}Module: ${module.name} (${sourceSummary})`);
+    private findAllTerraformFiles(dirOrFilePath: string): string[] {
+        const files: string[] = [];
         
-        if (module.dependencies.length === 0) {
-            console.log(`${indent}  No dependencies`);
+        try {
+            const stats = fs.statSync(dirOrFilePath);
+            
+            if (stats.isFile()) {
+                // If it's a file and has .tf extension, add it
+                if (dirOrFilePath.endsWith('.tf')) {
+                    files.push(dirOrFilePath);
+                }
+                return files;
+            }
+            
+            // It's a directory, find all .tf files
+            const entries = fs.readdirSync(dirOrFilePath);
+            
+            for (const entry of entries) {
+                if (entry.endsWith('.tf')) {
+                    const fullPath = path.join(dirOrFilePath, entry);
+                    try {
+                        const entryStats = fs.statSync(fullPath);
+                        if (entryStats.isFile()) {
+                            files.push(fullPath);
+                        }
+                    } catch (error) {
+                        // Skip files with stat errors
+                    }
+                }
+            }
+        } catch (error) {
+            console.error(`Error finding Terraform files in ${dirOrFilePath}:`, error);
+        }
+        
+        return files;
+    }
+    
+    /**
+     * Generate a formatted string representation of the file dependency tree
+     * @param file The file to format
+     * @param indent Indentation for formatting
+     * @param visitedPaths Set of already visited paths to avoid infinite recursion
+     * @returns Formatted string representation of the tree
+     */
+    formatFileDependencyTree(file: FileInfo, indent: string = '', visitedPaths: Set<string> = new Set()): string {
+        let result = '';
+        
+        // Avoid infinite recursion
+        if (visitedPaths.has(file.path)) {
+            return `${indent}├─ ${file.relativePath || file.path} (circular reference)\n`;
+        }
+        
+        visitedPaths.add(file.path);
+        
+        // Use relative path if available, otherwise full path
+        const displayPath = file.relativePath || file.path;
+        
+        // Show file information
+        if (file.isModule && file.moduleName && file.moduleSource) {
+            result += `${indent}├─ ${displayPath} (Module: ${file.moduleName}, Source: ${file.moduleSource})\n`;
+        } else if (indent === '') {
+            result += `${indent}📄 Root File: ${displayPath}\n`;
         } else {
-            console.log(`${indent}  Dependencies:`);
-            for (const dependency of module.dependencies) {
-                this.printDependencyTree(dependency, `${indent}    `);
+            result += `${indent}├─ ${displayPath}\n`;
+        }
+        
+        // Show dependencies
+        if (file.dependencies.length === 0) {
+            result += `${indent}   └─ No dependencies\n`;
+        } else {
+            result += `${indent}   └─ Dependencies (${file.dependencies.length}):\n`;
+            for (let i = 0; i < file.dependencies.length; i++) {
+                const dependency = file.dependencies[i];
+                const isLast = i === file.dependencies.length - 1;
+                // Use different indentation for the last item
+                const nextIndent = `${indent}${isLast ? '    ' : '   │'}`;
+                result += this.formatFileDependencyTree(dependency, nextIndent, new Set(visitedPaths));
             }
         }
+        
+        return result;
+    }
+    
+    /**
+     * Print a file dependency tree to the console
+     * @param file The file to print
+     */
+    printFileDependencyTree(file: FileInfo): void {
+        const treeOutput = this.formatFileDependencyTree(file);
+        console.log(treeOutput);
     }
 }
