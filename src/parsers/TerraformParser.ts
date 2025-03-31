@@ -1,8 +1,12 @@
+// src/parsers/TerraformParser.ts
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parse, TerraformConfig } from '@evops/hcl-terraform-parser';
 
+/**
+ * Represents a Terraform file with its dependencies
+ */
 export interface FileInfo {
     path: string;                     // Full path to the file
     relativePath?: string;            // Path relative to the workspace
@@ -13,7 +17,18 @@ export interface FileInfo {
     dependencies: FileInfo[];         // Files this file depends on
 }
 
+/**
+ * Parser for Terraform files to extract file dependencies
+ */
 export class TerraformParser {
+    /**
+     * Get all dependent file URIs for a Terraform file including:
+     * - All files in the same directory as the selected file
+     * - All files in module directories referenced by any file in the directory
+     * 
+     * @param filePath Path to the root Terraform file
+     * @returns Array of all related file paths
+     */
     async getAllDependentFileUris(filePath: string): Promise<string[]> {
         // Check if file exists
         if (!fs.existsSync(filePath)) {
@@ -23,19 +38,24 @@ export class TerraformParser {
         // Set to keep track of all unique file paths
         const allFiles = new Set<string>();
         
-        // Add the root file
+        // Add the selected file
         allFiles.add(filePath);
         
-        // Process the root file directory
+        // Get directory of the selected file
         const rootDir = path.dirname(filePath);
+        
+        // Add all files from the directory to start with
         this.addDirectoryFiles(rootDir, allFiles);
         
         // Track visited paths to avoid circular dependencies
         const visitedPaths = new Set<string>();
         visitedPaths.add(filePath);
         
-        // Process modules recursively
-        await this.processFileForUris(filePath, rootDir, allFiles, visitedPaths);
+        // For each file in the directory, process it for module references
+        const directoryFiles = Array.from(allFiles);
+        for (const dirFile of directoryFiles) {
+            await this.processFileForUris(dirFile, rootDir, allFiles, visitedPaths);
+        }
         
         // Convert to array and return
         return Array.from(allFiles);
@@ -55,6 +75,12 @@ export class TerraformParser {
         visitedPaths: Set<string>
     ): Promise<void> {
         try {
+            if (visitedPaths.has(filePath)) {
+                return; // Skip already processed files
+            }
+            
+            visitedPaths.add(filePath);
+            
             // Get module references from the file
             const moduleRefs = await this.extractModuleReferences(filePath);
             
@@ -69,13 +95,14 @@ export class TerraformParser {
                 
                 // If module path is a directory, process all files in it
                 if (fs.existsSync(modulePath) && fs.statSync(modulePath).isDirectory()) {
+                    // Add all files from the module directory
                     this.addDirectoryFiles(modulePath, allFiles);
                     
-                    // Process each file in the directory
+                    // Process each file in the module directory
                     const moduleFiles = this.findAllTerraformFiles(modulePath);
                     for (const moduleFile of moduleFiles) {
                         if (!visitedPaths.has(moduleFile)) {
-                            visitedPaths.add(moduleFile);
+                            // Process this module file for its own dependencies
                             await this.processFileForUris(
                                 moduleFile,
                                 path.dirname(moduleFile),
@@ -87,7 +114,8 @@ export class TerraformParser {
                 } else if (modulePath && !visitedPaths.has(modulePath)) {
                     // It's a file, add it and process it
                     allFiles.add(modulePath);
-                    visitedPaths.add(modulePath);
+                    
+                    // Process this file
                     await this.processFileForUris(
                         modulePath,
                         path.dirname(modulePath),
@@ -108,6 +136,10 @@ export class TerraformParser {
      */
     private addDirectoryFiles(dirPath: string, allFiles: Set<string>): void {
         try {
+            if (!fs.existsSync(dirPath)) {
+                return;
+            }
+            
             const entries = fs.readdirSync(dirPath);
             
             for (const entry of entries) {
@@ -150,31 +182,32 @@ export class TerraformParser {
         const visitedPaths = new Set<string>();
         visitedPaths.add(rootFilePath); // Mark root file as visited
         
-        // Add all .tf files from the same directory
-        const directoryFiles = this.findAllTerraformFiles(rootDir);
+        // Get all sibling Terraform files in the same directory
+        const directoryFiles = this.findAllTerraformFiles(rootDir).filter(f => f !== rootFilePath);
         
-        // Process each file in the directory (except the root file itself)
-        for (const dirFilePath of directoryFiles) {
-            if (dirFilePath !== rootFilePath) { // Skip the root file itself
-                const fileName = path.basename(dirFilePath);
-                
-                // Create file info for this sibling file
-                const fileInfo: FileInfo = {
-                    path: dirFilePath,
-                    relativePath: workspacePath ? path.relative(workspacePath, dirFilePath) : dirFilePath,
-                    name: fileName,
-                    dependencies: []
-                };
-                
-                // Add to root file's dependencies
-                rootFile.dependencies.push(fileInfo);
-                
-                // Mark as visited
-                visitedPaths.add(dirFilePath);
-            }
+        // Process each sibling file and add it as a direct dependency
+        for (const siblingFilePath of directoryFiles) {
+            const fileName = path.basename(siblingFilePath);
+            
+            // Create file info for this sibling file
+            const fileInfo: FileInfo = {
+                path: siblingFilePath,
+                relativePath: workspacePath ? path.relative(workspacePath, siblingFilePath) : siblingFilePath,
+                name: fileName,
+                dependencies: []
+            };
+            
+            // Add to root file's dependencies
+            rootFile.dependencies.push(fileInfo);
+            
+            // Mark as visited
+            visitedPaths.add(siblingFilePath);
+            
+            // Process this sibling file for its own module dependencies
+            await this.processFileForTree(fileInfo, siblingFilePath, rootDir, visitedPaths, workspacePath);
         }
         
-        // Process the root file and its modules
+        // Process the root file's module dependencies
         await this.processFileForTree(rootFile, rootFilePath, rootDir, visitedPaths, workspacePath);
         
         return rootFile;
@@ -465,7 +498,7 @@ export class TerraformParser {
         } else if (indent === '') {
             result += `${indent}📄 Root File: ${displayPath}\n`;
         } else {
-            result += `${indent}├─ ${displayPath}\n`;
+            result += `${indent}├─ ${displayPath} (Same Directory)\n`;
         }
         
         // Show dependencies
