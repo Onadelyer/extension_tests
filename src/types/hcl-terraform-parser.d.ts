@@ -5,12 +5,17 @@ declare module '@evops/hcl-terraform-parser' {
      * Represents a Terraform configuration structure
      */
     export interface TerraformConfig {
+      // Direct module structure (old format)
       module?: Record<string, ModuleConfig | ModuleConfig[]>;
-      resource?: Record<string, Record<string, unknown>>;
-      variable?: Record<string, unknown>;
-      output?: Record<string, unknown>;
-      provider?: Record<string, unknown>;
-      terraform?: Record<string, unknown>;
+      
+      // New parser format
+      path?: string;
+      variables?: Record<string, unknown>;
+      outputs?: Record<string, unknown>;
+      required_providers?: Record<string, unknown>;
+      managed_resources?: Record<string, unknown>;
+      data_resources?: Record<string, unknown>;
+      module_calls?: Record<string, ModuleConfig>;
       [key: string]: unknown;
     }
   

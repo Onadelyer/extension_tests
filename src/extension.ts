@@ -49,6 +49,18 @@ export function activate(context: vscode.ExtensionContext) {
           // Log that we're starting analysis
           console.log(`\n\n=== Analyzing Terraform dependencies for ${selectedFile.fsPath} ===`);
           
+          // Check file extension
+          if (!selectedFile.fsPath.endsWith('.tf')) {
+            console.log(`Warning: Selected file ${selectedFile.fsPath} does not have .tf extension`);
+          }
+          
+          // Check if file exists
+          if (!fs.existsSync(selectedFile.fsPath)) {
+            throw new Error(`Selected file does not exist: ${selectedFile.fsPath}`);
+          }
+          
+          console.log(`File exists. Size: ${fs.statSync(selectedFile.fsPath).size} bytes`);
+          
           // Build the dependency tree
           const dependencyTree = await parser.buildDependencyTree(selectedFile.fsPath);
           
@@ -67,8 +79,8 @@ export function activate(context: vscode.ExtensionContext) {
           const fileName = path.basename(selectedFile.fsPath, '.tf');
           vscode.window.showInformationMessage(`Created diagram from ${fileName}.tf`);
         } catch (error) {
-          console.error('Error creating diagram:', error);
-          vscode.window.showErrorMessage(`Error creating diagram: ${error}`);
+          console.error('Error analyzing Terraform file:', error);
+          vscode.window.showErrorMessage(`Error analyzing Terraform file: ${error}`);
         }
       } else {
         vscode.window.showInformationMessage('Please select a Terraform file first');
