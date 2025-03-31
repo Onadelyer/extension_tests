@@ -49,12 +49,18 @@ export class TerraformParser {
         
         // Track visited paths to avoid circular dependencies
         const visitedPaths = new Set<string>();
-        visitedPaths.add(filePath);
         
-        // For each file in the directory, process it for module references
+        // First, process the selected file to make sure its dependencies are analyzed
+        // This ensures that main.tf module references are processed even if it's the selected file
+        await this.processFileForUris(filePath, rootDir, allFiles, visitedPaths);
+        
+        // Then, process all other files in the directory
+        // This ensures we don't miss any dependencies
         const directoryFiles = Array.from(allFiles);
         for (const dirFile of directoryFiles) {
-            await this.processFileForUris(dirFile, rootDir, allFiles, visitedPaths);
+            if (!visitedPaths.has(dirFile)) {
+                await this.processFileForUris(dirFile, rootDir, allFiles, visitedPaths);
+            }
         }
         
         // Convert to array and return
@@ -369,22 +375,30 @@ export class TerraformParser {
             } catch (error) {
                 // If HCL parser fails, try regex fallback
                 try {
-                    const moduleRegex = /module\s+"([^"]+)"\s+{([^}]*)}/gs;
+                    // Improved regex to match more formats of module declarations
+                    // This will match both quoted and unquoted module names
+                    const moduleRegex = /module\s+(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_-]+))\s+{([^}]*)}/gs;
                     let match;
                     
                     while ((match = moduleRegex.exec(content)) !== null) {
-                        const moduleName = match[1];
-                        const moduleBody = match[2];
+                        // Get module name from any of the capture groups
+                        const moduleName = match[1] || match[2] || match[3];
+                        const moduleBody = match[4];
                         
-                        // Extract source from module body
-                        const sourceRegex = /source\s*=\s*"([^"]+)"/;
+                        // Improved source extraction regex
+                        // This will match both quoted and unquoted source values
+                        const sourceRegex = /source\s*=\s*(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_\.\/-]+))/;
                         const sourceMatch = moduleBody.match(sourceRegex);
                         
-                        if (sourceMatch && sourceMatch[1]) {
-                            moduleRefs.push({
-                                name: moduleName,
-                                source: sourceMatch[1]
-                            });
+                        if (sourceMatch) {
+                            // Get source from any of the capture groups
+                            const source = sourceMatch[1] || sourceMatch[2] || sourceMatch[3];
+                            if (source) {
+                                moduleRefs.push({
+                                    name: moduleName,
+                                    source: source
+                                });
+                            }
                         }
                     }
                 } catch (regexError) {
@@ -409,12 +423,36 @@ export class TerraformParser {
         if (source.startsWith('./') || source.startsWith('../') || path.isAbsolute(source) || !source.includes('://')) {
             try {
                 // Resolve the path
-                const resolvedPath = path.resolve(basePath, source);
+                let resolvedPath = path.resolve(basePath, source);
                 
                 // Check if it exists
                 if (fs.existsSync(resolvedPath)) {
+                    // If it's a directory, return it
+                    if (fs.statSync(resolvedPath).isDirectory()) {
+                        return resolvedPath;
+                    }
+                    // If it's a file, return it
                     return resolvedPath;
-                } else {
+                } 
+                
+                // Try adding .tf extension
+                const withTfExt = `${resolvedPath}.tf`;
+                if (fs.existsSync(withTfExt)) {
+                    return withTfExt;
+                }
+                
+                // Special case: if source doesn't start with ./ or ../ but is a local path
+                // This handles module references like "modules/vpc" instead of "./modules/vpc"
+                if (!source.startsWith('./') && !source.startsWith('../') && !path.isAbsolute(source)) {
+                    resolvedPath = path.resolve(basePath, `./${source}`);
+                    
+                    if (fs.existsSync(resolvedPath)) {
+                        if (fs.statSync(resolvedPath).isDirectory()) {
+                            return resolvedPath;
+                        }
+                        return resolvedPath;
+                    }
+                    
                     // Try adding .tf extension
                     const withTfExt = `${resolvedPath}.tf`;
                     if (fs.existsSync(withTfExt)) {
