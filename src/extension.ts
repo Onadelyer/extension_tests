@@ -48,7 +48,23 @@ export function activate(context: vscode.ExtensionContext) {
   // Register create diagram command (placeholder)
   context.subscriptions.push(
     vscode.commands.registerCommand('extension-test.createDiagramFromSelected', async () => {
-      vscode.window.showInformationMessage('This functionality has been removed.');
+      // Get the selected item from the TreeView directly
+      const selectedItems = treeView.selection;
+      const selectedFile = selectedItems.length > 0 && selectedItems[0].resourceUri ? 
+                           selectedItems[0].resourceUri : undefined;
+      
+      if (selectedFile) {
+        try {
+          // Create and open a new diagram
+          await vscode.commands.executeCommand('extension-test.createDiagram');
+          
+        } catch (error) {
+          console.error('Error creating diagram:', error);
+          vscode.window.showErrorMessage(`Error creating diagram: ${error}`);
+        }
+      } else {
+        vscode.window.showInformationMessage('Please select a Terraform file first');
+      }
     })
   );
   
