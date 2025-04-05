@@ -73,14 +73,15 @@ export function activate(context: vscode.ExtensionContext) {
     DiagramEditorProvider.register(context)
   );
   
-  // // Also update highlighting when the active editor changes
-  // context.subscriptions.push(
-  //   vscode.window.onDidChangeActiveTextEditor(async editor => {
-  //     if (editor && editor.document.uri.fsPath.endsWith('.tf')) {
-  //       await decorationProvider.setSelectedFile(editor.document.uri);
-  //     }
-  //   })
-  // );
+  // Export YAML command - this will be handled by the editor provider
+  // but we register it here to ensure it exists in the command palette
+  context.subscriptions.push(
+    vscode.commands.registerCommand('extension-test.exportDiagramToYaml', () => {
+      vscode.window.showInformationMessage(
+        'Use the "Export YAML" button in the diagram editor to export as YAML'
+      );
+    })
+  );
 }
 
 export function deactivate() {}
