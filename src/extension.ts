@@ -45,7 +45,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
   
-  // IMPORTANT: Register diagram commands directly - don't use DiagramEditorProvider.register anymore
+  // Register diagram commands 
   context.subscriptions.push(
     vscode.commands.registerCommand('extension-test.createDiagram', () => {
       try {

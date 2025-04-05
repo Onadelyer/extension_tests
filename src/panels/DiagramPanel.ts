@@ -93,26 +93,6 @@ export function openDiagramPanel(context: vscode.ExtensionContext, initialData?:
             console.error('Error processing diagram update:', error);
           }
           break;
-          
-        case 'saveToFile':
-          // Handle save request
-          if (message.content) {
-            saveDiagramToFile(message.content)
-              .then(success => {
-                panel.webview.postMessage({
-                  type: 'saveResult',
-                  success
-                });
-              })
-              .catch(error => {
-                panel.webview.postMessage({
-                  type: 'saveResult',
-                  success: false,
-                  error: error.message
-                });
-              });
-          }
-          break;
       }
     }
   );
@@ -193,44 +173,4 @@ async function getEditorContent(context: vscode.ExtensionContext, webview: vscod
     </body>
     </html>
   `;
-}
-
-/**
- * Save diagram data to a file
- * @param diagramData The diagram data to save
- * @returns Promise resolving to true if save was successful
- */
-async function saveDiagramToFile(diagramData: string): Promise<boolean> {
-  try {
-    // Parse the diagram data to get the name for the file
-    const diagram = JSON.parse(diagramData);
-    const defaultFileName = `${diagram.name || 'diagram'}.diagram`;
-    
-    // Show save dialog
-    const saveUri = await vscode.window.showSaveDialog({
-      defaultUri: vscode.Uri.file(defaultFileName),
-      filters: {
-        'Diagram Files': ['diagram'],
-        'All Files': ['*']
-      },
-      saveLabel: 'Save Diagram'
-    });
-    
-    if (saveUri) {
-      // Write the file
-      await vscode.workspace.fs.writeFile(
-        saveUri,
-        Buffer.from(diagramData, 'utf8')
-      );
-      
-      vscode.window.showInformationMessage(`Diagram saved to ${saveUri.fsPath}`);
-      return true;
-    }
-    
-    return false;
-  } catch (error) {
-    console.error('Error saving diagram to file:', error);
-    vscode.window.showErrorMessage(`Error saving diagram: ${error}`);
-    return false;
-  }
 }

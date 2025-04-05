@@ -12,19 +12,14 @@ import { DiagramData } from '../../types/aws';
 interface DiagramEditorProps {
   initialDiagram?: any;
   onUpdate?: (diagram: DiagramData) => void;
-  onSaveToFile?: (diagram: DiagramData) => void;
-  isSaving?: boolean;
 }
 
 export const DiagramEditor: React.FC<DiagramEditorProps> = ({ 
   initialDiagram, 
-  onUpdate, 
-  onSaveToFile,
-  isSaving = false
+  onUpdate
 }) => {
   const { setDiagram, convertToVSCodeData, diagram } = useDiagramStore();
   const [diagramName, setDiagramName] = useState<string>('New Diagram');
-  const [unsavedChanges, setUnsavedChanges] = useState<boolean>(false);
 
   // Initialize with initial diagram data or create a default one
   useEffect(() => {
@@ -36,15 +31,7 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({
       setDiagram(defaultDiagram);
       setDiagramName(defaultDiagram.name);
     }
-    setUnsavedChanges(false);
   }, [initialDiagram, setDiagram]);
-
-  // Mark changes as unsaved when diagram changes
-  useEffect(() => {
-    if (diagram) {
-      setUnsavedChanges(true);
-    }
-  }, [diagram]);
 
   // Update the diagram in parent component
   const handleUpdate = () => {
@@ -60,25 +47,9 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({
     }
   };
 
-  // Handle save to file
-  const handleSaveToFile = () => {
-    if (onSaveToFile && diagram) {
-      try {
-        const diagramData = convertToVSCodeData();
-        // Update the name
-        diagramData.name = diagramName;
-        onSaveToFile(diagramData);
-        setUnsavedChanges(false);
-      } catch (error) {
-        console.error('Error saving diagram:', error);
-      }
-    }
-  };
-
   // Handle name change
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setDiagramName(e.target.value);
-    setUnsavedChanges(true);
   };
 
   // Update parent component when name changes or after delay
@@ -131,42 +102,6 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({
                 handleUpdate(); // Update when focus is lost
               }}
             />
-            {unsavedChanges && (
-              <span style={{
-                marginLeft: '10px',
-                fontSize: '12px',
-                color: 'var(--vscode-editorCodeLens-foreground)'
-              }}>
-                (unsaved changes)
-              </span>
-            )}
-          </div>
-
-          <div className="editor-tools">
-            <button
-              onClick={handleSaveToFile}
-              style={{
-                padding: '6px 12px',
-                backgroundColor: 'var(--vscode-button-background)',
-                color: 'var(--vscode-button-foreground)',
-                border: 'none',
-                borderRadius: '3px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                opacity: isSaving ? 0.7 : 1
-              }}
-              disabled={isSaving}
-            >
-              {/* Simple save icon */}
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M19 21H5C3.89543 21 3 20.1046 3 19V5C3 3.89543 3.89543 3 5 3H16L21 8V19C21 20.1046 20.1046 21 19 21Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M17 21V13H7V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M7 3V8H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              {isSaving ? 'Saving...' : 'Save to File'}
-            </button>
           </div>
         </div>
 
