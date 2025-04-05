@@ -49,6 +49,11 @@ function App() {
             // Save to state
             vscode.setState({ diagram: diagramData });
             
+            // Store source files information globally if available
+            if (diagramData.sourceFiles) {
+              window.diagramSourceFiles = diagramData.sourceFiles;
+            }
+            
             // Clear any errors
             setError(null);
             setLoading(false);

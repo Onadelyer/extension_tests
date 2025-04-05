@@ -41,6 +41,13 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({
         // Update the name
         diagramData.name = diagramName;
         
+        // Ensure source files data is included
+        // This is a hacky way to ensure source files are included if they're missing
+        // In a production environment, you'd want to access this data more directly
+        if (!diagramData.sourceFiles && window.diagramSourceFiles) {
+          diagramData.sourceFiles = window.diagramSourceFiles;
+        }
+        
         // Convert to YAML
         const yamlContent = diagramToYaml(diagramData);
         

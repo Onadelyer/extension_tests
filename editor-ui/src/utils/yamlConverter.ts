@@ -8,10 +8,17 @@ import { DiagramData } from '../types/aws';
  */
 export const diagramToYaml = (diagram: DiagramData): string => {
   try {
+    console.log("Converting diagram to YAML:", diagram);
+    
     // Create a formatted version optimized for YAML
     const yamlFriendlyDiagram = {
       id: diagram.id,
       name: diagram.name,
+      // Include source files information if available
+      sourceFiles: diagram.sourceFiles ? {
+        rootFolder: diagram.sourceFiles.rootFolder,
+        files: diagram.sourceFiles.files
+      } : undefined,
       region: {
         id: diagram.region.id,
         name: diagram.region.name,
@@ -49,7 +56,7 @@ export const diagramToYaml = (diagram: DiagramData): string => {
     // Convert to YAML
     return yaml.dump(yamlFriendlyDiagram, {
       indent: 2,
-      lineWidth: 100,
+      lineWidth: -1,  // Prevent folding of long lines
       noRefs: true,
       sortKeys: false
     });
@@ -76,6 +83,11 @@ export const yamlToDiagram = (yamlString: string): DiagramData => {
     return {
       id: parsedYaml.id || '',
       name: parsedYaml.name || 'Untitled Diagram',
+      // Include source files if available
+      sourceFiles: parsedYaml.sourceFiles ? {
+        rootFolder: parsedYaml.sourceFiles.rootFolder || '',
+        files: Array.isArray(parsedYaml.sourceFiles.files) ? parsedYaml.sourceFiles.files : []
+      } : undefined,
       region: {
         id: parsedYaml.region?.id || '',
         name: parsedYaml.region?.name || 'Region',
