@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { TerraformTreeProvider } from "./providers/TerraformTreeProvider";
 import { DiagramEditorProvider } from "./providers/DiagramEditorProvider";
 import { TerraformDependencyDecorationProvider } from './providers/TerraformDependencyDecorationProvider';
+import { TerraformParser } from './parsers/TerraformParser';
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Congratulations, "extension-test" is now active!');
@@ -55,6 +57,40 @@ export function activate(context: vscode.ExtensionContext) {
       
       if (selectedFile) {
         try {
+          // Get information about the selected file and its dependencies
+          const parser = new TerraformParser();
+          const fileInfo = await parser.buildFileDependencyTree(selectedFile.fsPath);
+          
+          // Create a list of all files and determine the root folder
+          const allFiles: string[] = [fileInfo.path];
+          const collectFiles = (info: any) => {
+            if (info.dependencies) {
+              for (const dep of info.dependencies) {
+                allFiles.push(dep.path);
+                collectFiles(dep);
+              }
+            }
+          };
+          collectFiles(fileInfo);
+          
+          // Determine the common root folder
+          let rootFolder = path.dirname(selectedFile.fsPath);
+          const workspaceFolder = vscode.workspace.getWorkspaceFolder(selectedFile);
+          if (workspaceFolder) {
+            rootFolder = workspaceFolder.uri.fsPath;
+          }
+          
+          // Include diagram source info in a context value
+          const sourceFilesInfo = {
+            rootFolder: rootFolder,
+            files: allFiles
+          };
+          
+          console.log("Storing source files info:", sourceFilesInfo);
+          
+          // Store the source file info for use when the diagram is created
+          context.workspaceState.update('diagramSourceFiles', sourceFilesInfo);
+          
           // Create and open a new diagram
           await vscode.commands.executeCommand('extension-test.createDiagram');
           
@@ -73,14 +109,15 @@ export function activate(context: vscode.ExtensionContext) {
     DiagramEditorProvider.register(context)
   );
   
-  // // Also update highlighting when the active editor changes
-  // context.subscriptions.push(
-  //   vscode.window.onDidChangeActiveTextEditor(async editor => {
-  //     if (editor && editor.document.uri.fsPath.endsWith('.tf')) {
-  //       await decorationProvider.setSelectedFile(editor.document.uri);
-  //     }
-  //   })
-  // );
+  // Export YAML command - this will be handled by the editor provider
+  // but we register it here to ensure it exists in the command palette
+  context.subscriptions.push(
+    vscode.commands.registerCommand('extension-test.exportDiagramToYaml', () => {
+      vscode.window.showInformationMessage(
+        'Use the "Export YAML" button in the diagram editor to export as YAML'
+      );
+    })
+  );
 }
 
 export function deactivate() {}

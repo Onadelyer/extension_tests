@@ -1,9 +1,11 @@
-// src/providers/DiagramEditorProvider.ts (updated version)
+// src/providers/DiagramEditorProvider.ts (updated with YAML support)
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { DiagramModel } from '../models/aws/DiagramModel';
 import { AwsComponentRegistry } from '../models/aws/ComponentRegistry';
+import * as yaml from 'js-yaml';
+import { SourceFileInfo } from '../models/aws/DiagramModel';
 
 export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
   private static readonly viewType = 'extension-test.diagramEditor';
@@ -75,11 +77,20 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
       ]
     };
 
-    // Initialize the document if it's empty
+          // Initialize the document if it's empty
     if (document.getText() === '') {
       // Create an empty diagram model
       const diagramName = path.basename(document.uri.fsPath, '.diagram');
       const diagram = new DiagramModel(diagramName || 'New Diagram');
+      
+      // Check if there's source file information available
+      const sourceFilesInfo = this.context.workspaceState.get('diagramSourceFiles') as SourceFileInfo | undefined;
+      if (sourceFilesInfo && sourceFilesInfo.rootFolder && sourceFilesInfo.files) {
+        console.log("Setting source files:", sourceFilesInfo);
+        diagram.setSourceFiles(sourceFilesInfo.rootFolder, sourceFilesInfo.files);
+        // Clear the stored info after using it
+        this.context.workspaceState.update('diagramSourceFiles', undefined);
+      }
       
       const edit = new vscode.WorkspaceEdit();
       edit.insert(
@@ -121,20 +132,6 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
     webviewPanel.webview.onDidReceiveMessage(
       async message => {
         switch (message.type) {
-          case 'update':
-            // Update the document when the webview sends changes
-            if (message.content) {
-              const edit = new vscode.WorkspaceEdit();
-              edit.replace(
-                document.uri,
-                new vscode.Range(0, 0, document.lineCount, 0),
-                message.content
-              );
-              
-              await vscode.workspace.applyEdit(edit);
-            }
-            return;
-            
           case 'requestDiagram':
             // Send the current diagram data to the webview
             webviewPanel.webview.postMessage({
@@ -142,9 +139,59 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
               content: document.getText()
             });
             return;
+            
+          case 'exportYaml':
+            // Handle YAML export
+            await this._handleYamlExport(message.content, message.name);
+            return;
         }
       }
     );
+  }
+
+  /**
+   * Handle exporting the diagram to YAML
+   */
+  private async _handleYamlExport(yamlContent: string, diagramName: string): Promise<void> {
+    try {
+      // Get workspace root folder to use as default save location
+      let defaultUri: vscode.Uri | undefined;
+      
+      if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+        // Use the first workspace folder as the project root
+        const rootFolder = vscode.workspace.workspaceFolders[0];
+        defaultUri = vscode.Uri.joinPath(rootFolder.uri, `${diagramName}.yaml`);
+      } else {
+        // Fallback to a simple filename if no workspace is open
+        defaultUri = vscode.Uri.file(`${diagramName}.yaml`);
+      }
+      
+      // Let the user choose where to save the file, starting from the project root
+      const saveUri = await vscode.window.showSaveDialog({
+        defaultUri,
+        filters: {
+          'YAML files': ['yaml', 'yml'],
+          'All files': ['*']
+        },
+        saveLabel: 'Export as YAML',
+        title: 'Export Diagram as YAML'
+      });
+      
+      if (saveUri) {
+        // Write the file
+        fs.writeFileSync(saveUri.fsPath, yamlContent);
+        
+        // Show success message
+        vscode.window.showInformationMessage(`Diagram exported successfully to ${saveUri.fsPath}`);
+        
+        // Open the file
+        const document = await vscode.workspace.openTextDocument(saveUri);
+        await vscode.window.showTextDocument(document);
+      }
+    } catch (error) {
+      console.error('Error exporting diagram to YAML:', error);
+      vscode.window.showErrorMessage(`Error exporting diagram to YAML: ${error}`);
+    }
   }
 
   /**

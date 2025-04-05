@@ -4,12 +4,18 @@ import { RegionComponent } from "./components/RegionComponent";
 import { AwsComponentRegistry } from "./ComponentRegistry";
 import { generateUUID } from "../utils/IdGenerator";
 
+export interface SourceFileInfo {
+  rootFolder: string;
+  files: string[];
+}
+
 export class DiagramModel {
   id: string;
   name: string;
   region: RegionComponent;
   relationships: ComponentRelationship[] = [];
   terraformSource?: string;
+  sourceFiles?: SourceFileInfo;
   
   constructor(name: string, regionName: string = 'us-east-1') {
     this.id = generateUUID();
@@ -18,6 +24,14 @@ export class DiagramModel {
       name: 'Region',
       regionName: regionName
     });
+  }
+  
+  // Add source file information
+  setSourceFiles(rootFolder: string, files: string[]) {
+    this.sourceFiles = {
+      rootFolder,
+      files
+    };
   }
   
   // Add component to the region (or specified parent container)
@@ -143,7 +157,8 @@ export class DiagramModel {
       name: this.name,
       region: this.region.toJSON(),
       relationships: this.relationships.map(r => r.toJSON()),
-      terraformSource: this.terraformSource
+      terraformSource: this.terraformSource,
+      sourceFiles: this.sourceFiles
     };
   }
   
@@ -168,6 +183,14 @@ export class DiagramModel {
       diagram.relationships = json.relationships.map((r: any) => 
         ComponentRelationship.fromJSON(r)
       );
+    }
+    
+    // Restore source files information
+    if (json.sourceFiles) {
+      diagram.sourceFiles = {
+        rootFolder: json.sourceFiles.rootFolder,
+        files: json.sourceFiles.files
+      };
     }
     
     return diagram;
