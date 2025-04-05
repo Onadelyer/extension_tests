@@ -22,6 +22,7 @@ function App() {
   const [diagram, setDiagram] = useState<DiagramData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   useEffect(() => {
     // Try to get cached state first
@@ -63,6 +64,19 @@ function App() {
           setError(message.message || 'An unknown error occurred');
           setLoading(false);
           break;
+          
+        case 'saveResult':
+          setIsSaving(false);
+          if (message.success) {
+            // Reset unsaved changes status in DiagramEditor
+            if (diagram) {
+              // Clone the diagram to trigger a re-render but keep the same data
+              setDiagram({...diagram});
+            }
+          } else if (message.error) {
+            setError(`Failed to save: ${message.error}`);
+          }
+          break;
       }
     };
 
@@ -77,15 +91,25 @@ function App() {
     };
   }, []);
 
-  // Handle diagram save
-  const handleSaveDiagram = (updatedDiagram: DiagramData) => {
+  // Handle diagram update
+  const handleUpdateDiagram = (updatedDiagram: DiagramData) => {
     // Save to state
     vscode.setState({ diagram: updatedDiagram });
+    setDiagram(updatedDiagram);
     
     // Send the updated diagram back to the extension
     vscode.postMessage({
       type: 'update',
       content: JSON.stringify(updatedDiagram, null, 2)
+    });
+  };
+
+  // Handle explicit save to file
+  const handleSaveToFile = (diagramData: DiagramData) => {
+    setIsSaving(true);
+    vscode.postMessage({
+      type: 'saveToFile',
+      content: JSON.stringify(diagramData, null, 2)
     });
   };
 
@@ -177,7 +201,9 @@ function App() {
     <div className="app-container" style={{ height: '100vh', overflow: 'hidden' }}>
       <DiagramEditor
         initialDiagram={diagram}
-        onSave={handleSaveDiagram}
+        onUpdate={handleUpdateDiagram}
+        onSaveToFile={handleSaveToFile}
+        isSaving={isSaving}
       />
     </div>
   );

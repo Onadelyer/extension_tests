@@ -53,19 +53,7 @@
           "group": "navigation"
         }
       ]
-    },
-    "customEditors": [
-      {
-        "viewType": "extension-test.diagramEditor",
-        "displayName": "Diagram Editor",
-        "selector": [
-          {
-            "filenamePattern": "*.diagram"
-          }
-        ],
-        "priority": "default"
-      }
-    ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "yarn run compile && yarn run build-editor",

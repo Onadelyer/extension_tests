@@ -1,19 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { ReactFlowProvider, ReactFlowInstance } from 'reactflow';
+import { ReactFlowProvider } from 'reactflow';
 import 'reactflow/dist/style.css';
 
 import useDiagramStore from '../../store/diagramStore';
-import { createDefaultDiagram } from '../../../src/utils/diagramConverters';
+import { createDefaultDiagram } from '../../utils/diagramConverters';
 import DiagramCanvas from './Canvas';
 import ComponentToolbar from './Toolbar';
 import PropertyPanel from '../panels/PropertyPanel';
+import { DiagramData } from '../../types/aws';
 
 interface DiagramEditorProps {
   initialDiagram?: any;
-  onSave?: (diagram: any) => void;
+  onUpdate?: (diagram: DiagramData) => void;
+  onSaveToFile?: (diagram: DiagramData) => void;
+  isSaving?: boolean;
 }
 
-export const DiagramEditor: React.FC<DiagramEditorProps> = ({ initialDiagram, onSave }) => {
+export const DiagramEditor: React.FC<DiagramEditorProps> = ({ 
+  initialDiagram, 
+  onUpdate, 
+  onSaveToFile,
+  isSaving = false
+}) => {
   const { setDiagram, convertToVSCodeData, diagram } = useDiagramStore();
   const [diagramName, setDiagramName] = useState<string>('New Diagram');
   const [unsavedChanges, setUnsavedChanges] = useState<boolean>(false);
@@ -38,14 +46,28 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({ initialDiagram, on
     }
   }, [diagram]);
 
-  // Handle save
-  const handleSave = () => {
-    if (onSave) {
+  // Update the diagram in parent component
+  const handleUpdate = () => {
+    if (onUpdate && diagram) {
       try {
         const diagramData = convertToVSCodeData();
         // Update the name
         diagramData.name = diagramName;
-        onSave(diagramData);
+        onUpdate(diagramData);
+      } catch (error) {
+        console.error('Error updating diagram:', error);
+      }
+    }
+  };
+
+  // Handle save to file
+  const handleSaveToFile = () => {
+    if (onSaveToFile && diagram) {
+      try {
+        const diagramData = convertToVSCodeData();
+        // Update the name
+        diagramData.name = diagramName;
+        onSaveToFile(diagramData);
         setUnsavedChanges(false);
       } catch (error) {
         console.error('Error saving diagram:', error);
@@ -58,6 +80,15 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({ initialDiagram, on
     setDiagramName(e.target.value);
     setUnsavedChanges(true);
   };
+
+  // Update parent component when name changes or after delay
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      handleUpdate();
+    }, 1000);
+    
+    return () => clearTimeout(timeoutId);
+  }, [diagramName]);
 
   return (
     <ReactFlowProvider>
@@ -97,6 +128,7 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({ initialDiagram, on
               onBlur={(e) => {
                 e.target.style.backgroundColor = 'transparent';
                 e.target.style.borderColor = 'transparent';
+                handleUpdate(); // Update when focus is lost
               }}
             />
             {unsavedChanges && (
@@ -112,7 +144,7 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({ initialDiagram, on
 
           <div className="editor-tools">
             <button
-              onClick={handleSave}
+              onClick={handleSaveToFile}
               style={{
                 padding: '6px 12px',
                 backgroundColor: 'var(--vscode-button-background)',
@@ -122,9 +154,10 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({ initialDiagram, on
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '5px'
+                gap: '5px',
+                opacity: isSaving ? 0.7 : 1
               }}
-              disabled={!unsavedChanges}
+              disabled={isSaving}
             >
               {/* Simple save icon */}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -132,7 +165,7 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({ initialDiagram, on
                 <path d="M17 21V13H7V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M7 3V8H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Save
+              {isSaving ? 'Saving...' : 'Save to File'}
             </button>
           </div>
         </div>

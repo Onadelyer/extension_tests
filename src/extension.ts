@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { TerraformTreeProvider } from "./providers/TerraformTreeProvider";
-import { DiagramEditorProvider } from "./providers/DiagramEditorProvider";
 import { TerraformDependencyDecorationProvider } from './providers/TerraformDependencyDecorationProvider';
+import { openDiagramPanel } from './panels/DiagramPanel';
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Congratulations, "extension-test" is now active!');
@@ -45,42 +45,37 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
   
-  // Register create diagram command (placeholder)
+  // IMPORTANT: Register diagram commands directly - don't use DiagramEditorProvider.register anymore
   context.subscriptions.push(
-    vscode.commands.registerCommand('extension-test.createDiagramFromSelected', async () => {
-      // Get the selected item from the TreeView directly
-      const selectedItems = treeView.selection;
-      const selectedFile = selectedItems.length > 0 && selectedItems[0].resourceUri ? 
-                           selectedItems[0].resourceUri : undefined;
-      
-      if (selectedFile) {
-        try {
-          // Create and open a new diagram
-          await vscode.commands.executeCommand('extension-test.createDiagram');
-          
-        } catch (error) {
-          console.error('Error creating diagram:', error);
-          vscode.window.showErrorMessage(`Error creating diagram: ${error}`);
-        }
-      } else {
-        vscode.window.showInformationMessage('Please select a Terraform file first');
+    vscode.commands.registerCommand('extension-test.createDiagram', () => {
+      try {
+        openDiagramPanel(context);
+      } catch (error) {
+        console.error('Error opening diagram panel:', error);
+        vscode.window.showErrorMessage(`Error opening diagram: ${error}`);
       }
     })
   );
   
-  // Register the diagram editor provider
   context.subscriptions.push(
-    DiagramEditorProvider.register(context)
+    vscode.commands.registerCommand('extension-test.createDiagramFromSelected', () => {
+      try {
+        // Get the selected item from the TreeView directly
+        const selectedItems = treeView.selection;
+        const selectedFile = selectedItems.length > 0 && selectedItems[0].resourceUri ? 
+                            selectedItems[0].resourceUri : undefined;
+        
+        if (selectedFile) {
+          openDiagramPanel(context, { source: selectedFile.fsPath });
+        } else {
+          vscode.window.showInformationMessage('Please select a Terraform file first');
+        }
+      } catch (error) {
+        console.error('Error creating diagram from selection:', error);
+        vscode.window.showErrorMessage(`Error creating diagram: ${error}`);
+      }
+    })
   );
-  
-  // // Also update highlighting when the active editor changes
-  // context.subscriptions.push(
-  //   vscode.window.onDidChangeActiveTextEditor(async editor => {
-  //     if (editor && editor.document.uri.fsPath.endsWith('.tf')) {
-  //       await decorationProvider.setSelectedFile(editor.document.uri);
-  //     }
-  //   })
-  // );
 }
 
 export function deactivate() {}
