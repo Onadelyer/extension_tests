@@ -77,15 +77,13 @@ function App() {
     };
   }, []);
 
-  // Handle diagram save
-  const handleSaveDiagram = (updatedDiagram: DiagramData) => {
-    // Save to state
-    vscode.setState({ diagram: updatedDiagram });
-    
-    // Send the updated diagram back to the extension
+  // Handle YAML export
+  const handleExportYaml = (yamlContent: string, diagramName: string) => {
+    // Send YAML content to the extension
     vscode.postMessage({
-      type: 'update',
-      content: JSON.stringify(updatedDiagram, null, 2)
+      type: 'exportYaml',
+      content: yamlContent,
+      name: diagramName
     });
   };
 
@@ -177,7 +175,7 @@ function App() {
     <div className="app-container" style={{ height: '100vh', overflow: 'hidden' }}>
       <DiagramEditor
         initialDiagram={diagram}
-        onSave={handleSaveDiagram}
+        onExportYaml={handleExportYaml}
       />
     </div>
   );
