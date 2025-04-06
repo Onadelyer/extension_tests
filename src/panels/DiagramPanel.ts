@@ -2,6 +2,15 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { DiagramModel } from '../models/aws/DiagramModel';
+import { AwsComponentRegistry } from '../models/aws/ComponentRegistry';
+import { VpcComponent } from '../models/aws/components/VpcComponent';
+import { SubnetComponent } from '../models/aws/components/SubnetComponent';
+import { EC2InstanceComponent } from '../models/aws/components/EC2InstanceComponent';
+import { TerraformParser } from '../parsers/TerraformParser';
+import { RelationshipType } from '../models/aws/ComponentRelationship';
+
+// Initialize the component registry
+AwsComponentRegistry.initialize();
 
 /**
  * Opens a diagram editor in a webview panel
@@ -41,10 +50,27 @@ export function openDiagramPanel(context: vscode.ExtensionContext, initialData?:
           const diagram = new DiagramModel('New Diagram');
           diagramData = JSON.stringify(diagram.toJSON(), null, 2);
         } else if (initialData.source && typeof initialData.source === 'string') {
-          // Create diagram from source file
+          // Create diagram from source file - but don't save it
           const diagramName = path.basename(initialData.source, '.tf');
           const diagram = new DiagramModel(diagramName);
           diagram.terraformSource = initialData.source;
+          
+          // Parse the Terraform file and populate the diagram with resources
+          populateDiagramFromTerraformFile(diagram, initialData.source)
+            .then(() => {
+              // Send the updated diagram with resources to the webview
+              const updatedDiagramData = JSON.stringify(diagram.toJSON(), null, 2);
+              panel.webview.postMessage({
+                type: 'update',
+                content: updatedDiagramData
+              });
+            })
+            .catch(error => {
+              console.error('Error populating diagram from Terraform:', error);
+              vscode.window.showWarningMessage(`Error parsing Terraform resources: ${error.message}`);
+            });
+          
+          // Send initial diagram without resources (will be updated later)
           diagramData = JSON.stringify(diagram.toJSON(), null, 2);
         } else if (typeof initialData === 'string') {
           // Use raw string data
@@ -75,12 +101,12 @@ export function openDiagramPanel(context: vscode.ExtensionContext, initialData?:
       panel.webview.html = `<html><body><h2>Error</h2><p>${error.message}</p></body></html>`;
     });
 
-  // Handle messages from the webview
+  // Handle messages from the webview - only handle necessary messages
   panel.webview.onDidReceiveMessage(
     message => {
       switch (message.type) {
         case 'update':
-          // Process diagram updates
+          // Process diagram updates - only for UI updates, not for saving
           try {
             if (message.content) {
               const diagramData = JSON.parse(message.content);
@@ -93,11 +119,247 @@ export function openDiagramPanel(context: vscode.ExtensionContext, initialData?:
             console.error('Error processing diagram update:', error);
           }
           break;
+        case 'requestDiagram':
+          // Respond to diagram requests without loading from file
+          break;
       }
     }
   );
 
   return panel;
+}
+
+/**
+ * Populate a diagram model with components based on a Terraform file
+ * @param diagram The diagram model to populate
+ * @param filePath Path to the Terraform file
+ */
+async function populateDiagramFromTerraformFile(diagram: DiagramModel, filePath: string): Promise<void> {
+  try {
+    // Read the file content
+    const content = fs.readFileSync(filePath, 'utf8');
+    
+    // Use the Terraform Parser first to get all dependent files
+    const parser = new TerraformParser();
+    const allDependentFiles = await parser.getAllDependentFileUris(filePath);
+    
+    // Load all files content
+    for (const dependentFile of allDependentFiles) {
+      await parseResourcesAndAddToModel(dependentFile, diagram);
+    }
+    
+    // Create component relationships
+    createComponentRelationships(diagram);
+  } catch (error) {
+    console.error('Error parsing Terraform files:', error);
+    throw error;
+  }
+}
+
+/**
+ * Parse a Terraform file and add resources to the diagram model
+ */
+async function parseResourcesAndAddToModel(filePath: string, diagram: DiagramModel): Promise<void> {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    
+    // Try using the HCL parser
+    try {
+      const { parse } = require('@evops/hcl-terraform-parser');
+      const parsed = parse(content);
+      
+      // Process resources
+      await processHclResources(parsed, diagram);
+      
+    } catch (parserError) {
+      console.error('Error using HCL parser, falling back to regex:', parserError);
+      
+      // Fallback to regex-based parsing
+      await processWithRegexFallback(content, diagram);
+    }
+  } catch (error) {
+    console.error(`Error processing file ${filePath}:`, error);
+  }
+}
+
+/**
+ * Process resources from parsed HCL
+ */
+async function processHclResources(parsed: any, diagram: DiagramModel): Promise<void> {
+  // Starting positions for components
+  let xPos = 100;
+  let yPos = 100;
+  
+  // Check if we have managed_resources in the parsed output (newer parser format)
+  if (parsed.managed_resources) {
+    // Process managed resources
+    for (const [resourceType, resourceInstances] of Object.entries(parsed.managed_resources)) {
+      for (const [resourceName, resourceConfig] of Object.entries(resourceInstances as Record<string, any>)) {
+        await addResourceToModel(resourceType, resourceName, resourceConfig, diagram, { x: xPos, y: yPos });
+        
+        // Update position for next component
+        xPos += 150;
+        if (xPos > 600) {
+          xPos = 100;
+          yPos += 120;
+        }
+      }
+    }
+  } else {
+    // Check for 'resource' block directly (older format)
+    for (const [key, value] of Object.entries(parsed)) {
+      if (key === 'resource' && typeof value === 'object') {
+        for (const [resourceType, resourceInstances] of Object.entries(value as Record<string, any>)) {
+          for (const [resourceName, resourceConfig] of Object.entries(resourceInstances as Record<string, any>)) {
+            await addResourceToModel(resourceType, resourceName, resourceConfig, diagram, { x: xPos, y: yPos });
+            
+            // Update position for next component
+            xPos += 150;
+            if (xPos > 600) {
+              xPos = 100;
+              yPos += 120;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Process file with regex as fallback
+ */
+async function processWithRegexFallback(content: string, diagram: DiagramModel): Promise<void> {
+  let xPos = 100;
+  let yPos = 100;
+  
+  // Resource regex
+  const resourceRegex = /resource\s+"([^"]+)"\s+"([^"]+)"\s+{([^}]*)}/gs;
+  
+  let match;
+  while ((match = resourceRegex.exec(content)) !== null) {
+    const resourceType = match[1];
+    const resourceName = match[2];
+    const configBlock = match[3];
+    
+    // Extract simple config properties
+    const config: Record<string, any> = {};
+    const propRegex = /([a-zA-Z0-9_]+)\s*=\s*"([^"]*)"/g;
+    let propMatch;
+    
+    while ((propMatch = propRegex.exec(configBlock)) !== null) {
+      config[propMatch[1]] = propMatch[2];
+    }
+    
+    await addResourceToModel(resourceType, resourceName, config, diagram, { x: xPos, y: yPos });
+    
+    // Update position for next component
+    xPos += 150;
+    if (xPos > 600) {
+      xPos = 100;
+      yPos += 120;
+    }
+  }
+}
+
+/**
+ * Add a resource to the diagram model based on its type
+ */
+async function addResourceToModel(
+  resourceType: string, 
+  resourceName: string, 
+  config: any, 
+  diagram: DiagramModel,
+  position: { x: number, y: number }
+): Promise<void> {
+  // Map Terraform resource types to our model components
+  if (resourceType === 'aws_vpc') {
+    const vpc = new VpcComponent({
+      name: `VPC: ${resourceName}`,
+      cidrBlock: config.cidr_block || '10.0.0.0/16',
+      position: position,
+      properties: {
+        terraformId: `${resourceType}.${resourceName}`,
+        ...config
+      }
+    });
+    
+    diagram.addComponent(vpc);
+    
+  } else if (resourceType === 'aws_subnet') {
+    const subnet = new SubnetComponent({
+      name: `Subnet: ${resourceName}`,
+      cidrBlock: config.cidr_block || '10.0.1.0/24',
+      availabilityZone: config.availability_zone || 'us-east-1a',
+      isPublic: config.map_public_ip_on_launch === 'true',
+      position: position,
+      properties: {
+        terraformId: `${resourceType}.${resourceName}`,
+        ...config
+      }
+    });
+    
+    diagram.addComponent(subnet);
+    
+  } else if (resourceType === 'aws_instance') {
+    const instance = new EC2InstanceComponent({
+      name: `EC2: ${resourceName}`,
+      instanceType: config.instance_type || 't2.micro',
+      ami: config.ami || 'ami-12345',
+      position: position,
+      properties: {
+        terraformId: `${resourceType}.${resourceName}`,
+        ...config
+      }
+    });
+    
+    diagram.addComponent(instance);
+  }
+  // Add more resource types as needed
+}
+
+/**
+ * Create relationships between components
+ */
+function createComponentRelationships(diagram: DiagramModel): void {
+  const components = diagram.region.getAllChildren();
+  
+  // Find subnet-VPC relationships
+  const vpcs = components.filter(c => c instanceof VpcComponent);
+  const subnets = components.filter(c => c instanceof SubnetComponent);
+  const instances = components.filter(c => c instanceof EC2InstanceComponent);
+  
+  // Connect subnets to VPCs based on properties
+  for (const subnet of subnets) {
+    const subnetProps = subnet.properties;
+    if (subnetProps.vpc_id) {
+      // Find the VPC with matching ID in properties
+      const matchingVpc = vpcs.find(vpc => 
+        vpc.properties.id === subnetProps.vpc_id || 
+        vpc.properties.terraformId === subnetProps.vpc_id
+      );
+      
+      if (matchingVpc) {
+        diagram.addRelationship(matchingVpc.id, subnet.id, RelationshipType.CONTAINS, 'contains');
+      }
+    }
+  }
+  
+  // Connect instances to subnets
+  for (const instance of instances) {
+    const instanceProps = instance.properties;
+    if (instanceProps.subnet_id) {
+      // Find the subnet with matching ID
+      const matchingSubnet = subnets.find(subnet => 
+        subnet.properties.id === instanceProps.subnet_id || 
+        subnet.properties.terraformId === instanceProps.subnet_id
+      );
+      
+      if (matchingSubnet) {
+        diagram.addRelationship(matchingSubnet.id, instance.id, RelationshipType.CONTAINS, 'deployed in');
+      }
+    }
+  }
 }
 
 /**

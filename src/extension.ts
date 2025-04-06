@@ -1,13 +1,17 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
 import * as path from 'path';
+import * as fs from 'fs';
 import { TerraformTreeProvider } from "./providers/TerraformTreeProvider";
-import { DiagramEditorProvider } from "./providers/DiagramEditorProvider";
 import { TerraformDependencyDecorationProvider } from './providers/TerraformDependencyDecorationProvider';
-import { ResourceMappingConfigManager } from './config/ResourceMappingConfig';
-import { TerraformResourceParser } from './parsers/TerraformResourceParser';
-import { TerraformToDiagramConverter } from './converters/TerraformToDiagramConverter';
-import { TerraformParser } from './parsers/TerraformParser';
+import { openDiagramPanel } from './panels/DiagramPanel';
+import { TerraformParser, FileInfo } from './parsers/TerraformParser';
+
+// Define resource interface for clarity
+interface TerraformResource {
+  type: string;
+  name: string;
+  config: Record<string, any>;
+}
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Congratulations, "extension-test" is now active!');
@@ -51,233 +55,262 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
   
-  // Register resource mapping config commands
-  ResourceMappingConfigManager.registerCommands(context);
-  
-  // Register create diagram from selected file command
+  // Register diagram commands 
   context.subscriptions.push(
-    vscode.commands.registerCommand('extension-test.createDiagramFromSelected', async () => {
-      // Get the selected item from the TreeView directly
-      const selectedItems = treeView.selection;
-      const selectedFile = selectedItems.length > 0 && selectedItems[0].resourceUri ? 
-                           selectedItems[0].resourceUri : undefined;
-      
-      if (selectedFile) {
-        try {
-          // Show progress indicator
-          await vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: 'Creating diagram from Terraform resources',
-            cancellable: false
-          }, async (progress) => {
-            // Update progress
-            progress.report({ increment: 0, message: 'Loading resource mapping configuration...' });
-            
-            // Load resource mapping config
-            const config = await ResourceMappingConfigManager.loadConfig();
-            
-            // Update progress
-            progress.report({ increment: 30, message: 'Parsing Terraform resources...' });
-            
-            // Parse resources from selected file and dependencies
-            const resourceParser = new TerraformResourceParser();
-            const resources = await resourceParser.parseResourcesFromFile(selectedFile.fsPath, config);
-            
-            if (resources.length === 0) {
-              // Provide options to troubleshoot
-              const action = await vscode.window.showErrorMessage(
-                'No matching resources found. Check your resource mapping configuration.',
-                'Run Diagnostics',
-                'Edit Config',
-                'Cancel'
-              );
-              
-              if (action === 'Run Diagnostics') {
-                if (selectedFile) {
-                  await vscode.commands.executeCommand('extension-test.runTerraformDiagnostics', selectedFile);
-                } else {
-                  vscode.window.showErrorMessage('No file selected for diagnostics');
-                }
-                return;
-              } else if (action === 'Edit Config') {
-                await vscode.commands.executeCommand('extension-test.editResourceMappingConfig');
-                return;
-              }
-              
-              return;
-            }
-            
-            // Update progress
-            progress.report({ increment: 30, message: 'Converting to diagram components...' });
-            
-            // Convert resources to diagram
-            const converter = new TerraformToDiagramConverter(resources, config);
-            const diagram = converter.convert(path.basename(selectedFile.fsPath));
-            
-            // Update progress
-            progress.report({ increment: 30, message: 'Creating diagram file...' });
-            
-            // Create a new diagram file
-            const baseFileName = path.basename(selectedFile.fsPath, '.tf');
-            const diagramFileName = `${baseFileName}.diagram`;
-            
-            // Get current workspace folder
-            const workspaceFolder = vscode.workspace.getWorkspaceFolder(selectedFile);
-            if (!workspaceFolder) {
-              throw new Error('No workspace folder available');
-            }
-            
-            // Create diagram file path
-            const diagramFilePath = path.join(workspaceFolder.uri.fsPath, diagramFileName);
-            
-            // Write diagram data to file
-            fs.writeFileSync(diagramFilePath, JSON.stringify(diagram.toJSON(), null, 2), 'utf8');
-            
-            // Open the diagram with our custom editor
-            const diagramUri = vscode.Uri.file(diagramFilePath);
-            await vscode.commands.executeCommand('vscode.openWith', diagramUri, 'extension-test.diagramEditor');
-            
-            // Show success message
-            progress.report({ increment: 10, message: 'Done!' });
-            
-            vscode.window.showInformationMessage(
-              `Diagram created with ${resources.length} resources`
-            );
-          });
-        } catch (error) {
-          console.error('Error creating diagram:', error);
-          vscode.window.showErrorMessage(`Error creating diagram: ${error}`);
-        }
-      } else {
-        vscode.window.showInformationMessage('Please select a Terraform file first');
+    vscode.commands.registerCommand('extension-test.createDiagram', () => {
+      try {
+        openDiagramPanel(context);
+      } catch (error) {
+        console.error('Error opening diagram panel:', error);
+        vscode.window.showErrorMessage(`Error opening diagram: ${error}`);
       }
     })
   );
   
-  // Register diagnostic command for Terraform resource parsing
   context.subscriptions.push(
-    vscode.commands.registerCommand('extension-test.runTerraformDiagnostics', async (fileUri: vscode.Uri) => {
+    vscode.commands.registerCommand('extension-test.createDiagramFromSelected', () => {
       try {
-        if (!fileUri) {
-          // If no file provided, get from selection
-          const selectedItems = treeView.selection;
-          let fileUri: vscode.Uri = selectedItems.length > 0 && selectedItems[0].resourceUri ? 
-                         selectedItems[0].resourceUri : vscode.Uri.parse('file:///');
-          
-          if (!fileUri) {
-            vscode.window.showInformationMessage('Please select a Terraform file first');
-            return;
-          }
-        }
+        // Get the selected item from the TreeView directly
+        const selectedItems = treeView.selection;
+        const selectedFile = selectedItems.length > 0 && selectedItems[0].resourceUri ? 
+                            selectedItems[0].resourceUri : undefined;
         
-        // Create output channel for diagnostics
-        const outputChannel = vscode.window.createOutputChannel('Terraform Resource Diagnostics');
+        if (selectedFile) {
+          // Only pass the source information, don't save to file
+          openDiagramPanel(context, { source: selectedFile.fsPath });
+        } else {
+          vscode.window.showInformationMessage('Please select a Terraform file first');
+        }
+      } catch (error) {
+        console.error('Error creating diagram from selection:', error);
+        vscode.window.showErrorMessage(`Error creating diagram: ${error}`);
+      }
+    })
+  );
+
+  // Register the diagnostics command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('extension-test.runTerraformDiagnostics', async () => {
+      try {
+        // Create or get output channel
+        const outputChannel = vscode.window.createOutputChannel('Terraform Diagnostics');
         outputChannel.clear();
         outputChannel.show();
         
-        outputChannel.appendLine(`Running diagnostics on: ${fileUri.fsPath}`);
-        outputChannel.appendLine('--------------------------------------------------------------');
+        // Get the file or directory to analyze
+        const activeEditor = vscode.window.activeTextEditor;
+        let targetUri: vscode.Uri | undefined;
         
-        // Create a console.log override to redirect to output channel
-        const originalConsoleLog = console.log;
-        const originalConsoleWarn = console.warn;
-        const originalConsoleError = console.error;
-        
-        console.log = (...args) => {
-          outputChannel.appendLine(args.map(a => String(a)).join(' '));
-          originalConsoleLog(...args);
-        };
-        
-        console.warn = (...args) => {
-          outputChannel.appendLine('WARNING: ' + args.map(a => String(a)).join(' '));
-          originalConsoleWarn(...args);
-        };
-        
-        console.error = (...args) => {
-          outputChannel.appendLine('ERROR: ' + args.map(a => String(a)).join(' '));
-          originalConsoleError(...args);
-        };
-        
-        try {
-          // Step 1: Check file content
-          outputChannel.appendLine('\n--- Step 1: Checking file content ---');
-          const fileContent = fs.readFileSync(fileUri.fsPath, 'utf8');
-          const firstFewLines = fileContent.split('\n').slice(0, 10).join('\n');
-          outputChannel.appendLine('First 10 lines of file:');
-          outputChannel.appendLine(firstFewLines);
-          outputChannel.appendLine('...');
-          
-          // Step 2: List dependencies
-          outputChannel.appendLine('\n--- Step 2: Listing dependencies ---');
-          const terraformParser = new TerraformParser();
-          const dependencies = await terraformParser.getAllDependentFileUris(fileUri.fsPath);
-          outputChannel.appendLine(`Found ${dependencies.length} dependent files:`);
-          dependencies.forEach((dep: string) => outputChannel.appendLine(`- ${dep}`));
-          
-          // Step 3: Load config
-          outputChannel.appendLine('\n--- Step 3: Loading resource mapping config ---');
-          const config = await ResourceMappingConfigManager.loadConfig();
-          outputChannel.appendLine(`Config version: ${config.version}`);
-          outputChannel.appendLine(`Resource mappings: ${config.resourceMappings.length}`);
-          outputChannel.appendLine('Resource types in config:');
-          config.resourceMappings.forEach(mapping => {
-            outputChannel.appendLine(`- ${mapping.terraformType} → ${mapping.componentType}`);
-          });
-          
-          // Step 4: Parse resources
-          outputChannel.appendLine('\n--- Step 4: Parsing resources ---');
-          const resourceParser = new TerraformResourceParser();
-          const resources = await resourceParser.parseResourcesFromFile(fileUri.fsPath, config);
-          
-          outputChannel.appendLine(`\nFound ${resources.length} resources after filtering:`);
-          resources.forEach(resource => {
-            outputChannel.appendLine(`- ${resource.id} (from ${path.basename(resource.sourceFile)})`);
-            outputChannel.appendLine(`  Attributes: ${JSON.stringify(resource.attributes)}`);
-            if (resource.dependencies.length > 0) {
-              outputChannel.appendLine(`  Dependencies: ${resource.dependencies.join(', ')}`);
-            }
-          });
-          
-          // Step 5: Summary
-          outputChannel.appendLine('\n--- Step 5: Diagnostics Summary ---');
-          if (resources.length === 0) {
-            outputChannel.appendLine('⚠️ No resources were found that match your configuration.');
-            outputChannel.appendLine('Recommendations:');
-            outputChannel.appendLine('1. Check if your Terraform files contain resources with the types listed in your config');
-            outputChannel.appendLine('2. Edit your resource mapping configuration with types that match your Terraform files');
-            outputChannel.appendLine('3. Run the "Edit Resource Mapping Configuration" command to adjust your settings');
-          } else {
-            outputChannel.appendLine('✅ Resources were successfully parsed.');
-            outputChannel.appendLine(`Found ${resources.length} resources across ${dependencies.length} files.`);
-          }
-          
-        } finally {
-          // Restore console functions
-          console.log = originalConsoleLog;
-          console.warn = originalConsoleWarn;
-          console.error = originalConsoleError;
+        if (activeEditor && activeEditor.document.languageId === 'terraform') {
+          // Use active editor if it's a Terraform file
+          targetUri = activeEditor.document.uri;
+        } else if (treeView.selection.length > 0 && treeView.selection[0].resourceUri) {
+          // Use selected tree item
+          targetUri = treeView.selection[0].resourceUri;
         }
         
-        outputChannel.appendLine('\nDiagnostics complete.');
+        if (!targetUri) {
+          vscode.window.showWarningMessage('Please select a Terraform file or directory to analyze');
+          return;
+        }
         
+        await vscode.window.withProgress({
+          location: vscode.ProgressLocation.Notification,
+          title: "Running Terraform diagnostics...",
+          cancellable: false
+        }, async (progress) => {
+          try {
+            // Get stats for the URI
+            const stats = await vscode.workspace.fs.stat(targetUri);
+            
+            // Array to hold files to analyze
+            const filesToAnalyze: vscode.Uri[] = [];
+            
+            if (stats.type === vscode.FileType.Directory) {
+              // If it's a directory, find all .tf files in it
+              outputChannel.appendLine(`Analyzing directory: ${targetUri.fsPath}`);
+              outputChannel.appendLine('---------------------------------------------------');
+              
+              // Get all .tf files in the directory
+              const dirEntries = await vscode.workspace.fs.readDirectory(targetUri);
+              for (const [name, type] of dirEntries) {
+                if (type === vscode.FileType.File && name.endsWith('.tf')) {
+                  filesToAnalyze.push(vscode.Uri.joinPath(targetUri, name));
+                }
+              }
+              
+              if (filesToAnalyze.length === 0) {
+                outputChannel.appendLine('No Terraform files found in this directory.');
+                return;
+              }
+              
+              outputChannel.appendLine(`Found ${filesToAnalyze.length} Terraform files to analyze.\n`);
+            } else if (stats.type === vscode.FileType.File && targetUri.fsPath.endsWith('.tf')) {
+              // If it's a Terraform file, analyze just that file
+              filesToAnalyze.push(targetUri);
+            } else {
+              outputChannel.appendLine('Selected item is not a Terraform file or directory.');
+              return;
+            }
+            
+            // Use the TerraformParser for analysis
+            const parser = new TerraformParser();
+            
+            // Now analyze each file
+            for (let i = 0; i < filesToAnalyze.length; i++) {
+              const fileUri = filesToAnalyze[i];
+              const fileName = path.basename(fileUri.fsPath);
+              
+              outputChannel.appendLine(`Analyzing file (${i + 1}/${filesToAnalyze.length}): ${fileName}`);
+              outputChannel.appendLine('-'.repeat(fileName.length + 24));
+              
+              try {
+                // Extract resources from the file
+                const resources = await extractTerraformResources(fileUri.fsPath);
+                
+                if (resources.length === 0) {
+                  outputChannel.appendLine('  No resources found in this file.\n');
+                } else {
+                  outputChannel.appendLine(`  Found ${resources.length} resources:\n`);
+                  
+                  // Display each resource
+                  resources.forEach((resource, index) => {
+                    outputChannel.appendLine(`  [Resource ${index + 1}] ${resource.type}.${resource.name}`);
+                    
+                    if (resource.config && Object.keys(resource.config).length > 0) {
+                      outputChannel.appendLine('    Configuration:');
+                      
+                      // Format the configuration properties
+                      for (const [key, value] of Object.entries(resource.config)) {
+                        if (key !== 'id' && key !== 'path') { // Skip non-user properties
+                          const valueStr = typeof value === 'object' 
+                            ? JSON.stringify(value, null, 2).replace(/\n/g, '\n      ') 
+                            : value;
+                          outputChannel.appendLine(`      ${key}: ${valueStr}`);
+                        }
+                      }
+                    }
+                    
+                    //outputChannel.appendLine(''); // Empty line between resources
+                  });
+                }
+                
+                // Try to build file dependency tree
+                try {
+                  const fileInfo = await parser.buildFileDependencyTree(fileUri.fsPath);
+                  
+                  if (fileInfo && fileInfo.dependencies && fileInfo.dependencies.length > 0) {
+                    outputChannel.appendLine('  Dependencies:');
+                    displayDependencies(fileInfo.dependencies, outputChannel, '    ');
+                    outputChannel.appendLine('');
+                  }
+                } catch (error) {
+                  console.error('Error building file dependency tree:', error);
+                }
+              } catch (error) {
+                outputChannel.appendLine(`  Error analyzing file: ${error}\n`);
+              }
+              
+              // Update progress
+              progress.report({ 
+                increment: (100 / filesToAnalyze.length), 
+                message: `Analyzed ${i + 1}/${filesToAnalyze.length} files` 
+              });
+            }
+            
+            outputChannel.appendLine('===================================================');
+            outputChannel.appendLine(`Terraform diagnostics completed for ${filesToAnalyze.length} files.`);
+            outputChannel.show(true); // Show and focus
+          } catch (error) {
+            outputChannel.appendLine(`Error: ${error}`);
+            throw error;
+          }
+        });
       } catch (error) {
         console.error('Error running Terraform diagnostics:', error);
         vscode.window.showErrorMessage(`Error running diagnostics: ${error}`);
       }
     })
   );
-  
-  // Register the diagram editor provider
-  context.subscriptions.push(
-    DiagramEditorProvider.register(context)
-  );
-  
-  // Add command to open resource mapping configuration
-  context.subscriptions.push(
-    vscode.commands.registerCommand('extension-test.openResourceMappingConfig', async () => {
-      await vscode.commands.executeCommand('extension-test.editResourceMappingConfig');
-    })
-  );
 }
 
 export function deactivate() {}
+
+/**
+ * Extract Terraform resources from a file
+ */
+async function extractTerraformResources(filePath: string): Promise<TerraformResource[]> {
+  // Read the file content
+  const content = fs.readFileSync(filePath, 'utf8');
+  
+  // Try using the HCL parser if available
+  try {
+    // Attempt to use @evops/hcl-terraform-parser
+    const { parse } = require('@evops/hcl-terraform-parser');
+    const parsed = parse(content);
+    
+    const resources: TerraformResource[] = [];
+    
+    // Check if we have managed_resources in the parsed output (newer parser format)
+    if (parsed.managed_resources) {
+      // Process managed resources (newer format)
+      for (const [resourceType, resourceInstances] of Object.entries(parsed.managed_resources)) {
+        for (const [resourceName, resourceConfig] of Object.entries(resourceInstances as Record<string, any>)) {
+          resources.push({
+            type: resourceType,
+            name: resourceName,
+            config: resourceConfig || {}
+          });
+        }
+      }
+    } else {
+      // Process resource blocks directly
+      for (const [key, value] of Object.entries(parsed)) {
+        if (key === 'resource' && typeof value === 'object') {
+          for (const [resourceType, resourceInstances] of Object.entries(value as Record<string, any>)) {
+            for (const [resourceName, resourceConfig] of Object.entries(resourceInstances as Record<string, any>)) {
+              resources.push({
+                type: resourceType,
+                name: resourceName,
+                config: resourceConfig || {}
+              });
+            }
+          }
+        }
+      }
+    }
+    
+    return resources;
+  } catch (error) {
+    console.error('HCL parser failed, falling back to regex-based parser:', error);
+    
+    // Fallback to regex-based parsing
+    const resources: TerraformResource[] = [];
+    const resourceRegex = /resource\s+"([^"]+)"\s+"([^"]+)"\s+{/g;
+    
+    let match;
+    while ((match = resourceRegex.exec(content)) !== null) {
+      resources.push({
+        type: match[1],
+        name: match[2],
+        config: {} // Simple fallback doesn't parse properties
+      });
+    }
+    
+    return resources;
+  }
+}
+
+/**
+ * Display dependencies recursively in the output channel
+ */
+function displayDependencies(dependencies: FileInfo[], output: vscode.OutputChannel, indent: string): void {
+  dependencies.forEach((dep, index) => {
+    const prefix = `${indent}[${index + 1}] `;
+    output.appendLine(`${prefix}${dep.name}${dep.isModule ? ` (Module: ${dep.moduleName})` : ''}`);
+    
+    if (dep.dependencies && dep.dependencies.length > 0) {
+      displayDependencies(dep.dependencies, output, indent + '  ');
+    }
+  });
+}

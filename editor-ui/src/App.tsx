@@ -77,13 +77,13 @@ function App() {
     };
   }, []);
 
-  // Handle diagram update
+  // Handle diagram update - no file saving, just state updates
   const handleUpdateDiagram = (updatedDiagram: DiagramData) => {
     // Save to state
     vscode.setState({ diagram: updatedDiagram });
     setDiagram(updatedDiagram);
     
-    // Send the updated diagram back to the extension
+    // Send the updated diagram back to the extension for UI updates only
     vscode.postMessage({
       type: 'update',
       content: JSON.stringify(updatedDiagram, null, 2)
