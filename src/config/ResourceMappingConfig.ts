@@ -98,12 +98,15 @@ export class ResourceMappingConfigManager {
     return {
       version: "1.0",
       resourceMappings: [
+        // Networking resources
         {
           terraformType: "aws_vpc",
           componentType: "VpcComponent",
           attributeMapping: {
             "cidr_block": "cidrBlock",
-            "tags.Name": "name"
+            "tags.Name": "name",
+            "id": "id",
+            "name": "name"
           }
         },
         {
@@ -113,19 +116,88 @@ export class ResourceMappingConfigManager {
             "cidr_block": "cidrBlock",
             "availability_zone": "availabilityZone",
             "tags.Name": "name",
-            "map_public_ip_on_launch": "isPublic"
+            "map_public_ip_on_launch": "isPublic",
+            "id": "id",
+            "name": "name"
           }
         },
+        // Compute resources
         {
           terraformType: "aws_instance",
           componentType: "EC2InstanceComponent",
           attributeMapping: {
             "instance_type": "instanceType",
             "ami": "ami",
-            "tags.Name": "name"
+            "tags.Name": "name",
+            "id": "id",
+            "name": "name"
+          }
+        },
+        // Security resources
+        {
+          terraformType: "aws_security_group",
+          componentType: "SecurityGroupComponent",
+          attributeMapping: {
+            "name": "name",
+            "description": "description",
+            "tags.Name": "name",
+            "id": "id"
+          }
+        },
+        // Storage resources
+        {
+          terraformType: "aws_s3_bucket",
+          componentType: "S3BucketComponent",
+          attributeMapping: {
+            "bucket": "name",
+            "tags.Name": "name",
+            "id": "id"
+          }
+        },
+        // Database resources
+        {
+          terraformType: "aws_db_instance",
+          componentType: "RDSInstanceComponent",
+          attributeMapping: {
+            "engine": "engine",
+            "instance_class": "instanceClass",
+            "name": "name",
+            "tags.Name": "name",
+            "id": "id"
+          }
+        },
+        // Serverless resources
+        {
+          terraformType: "aws_lambda_function",
+          componentType: "LambdaFunctionComponent",
+          attributeMapping: {
+            "function_name": "name",
+            "runtime": "runtime",
+            "handler": "handler",
+            "tags.Name": "name",
+            "id": "id"
+          }
+        },
+        // Gateway resources
+        {
+          terraformType: "aws_internet_gateway",
+          componentType: "InternetGatewayComponent",
+          attributeMapping: {
+            "tags.Name": "name",
+            "id": "id",
+            "name": "name"
+          }
+        },
+        // Route table resources
+        {
+          terraformType: "aws_route_table",
+          componentType: "RouteTableComponent",
+          attributeMapping: {
+            "tags.Name": "name",
+            "id": "id",
+            "name": "name"
           }
         }
-        // More resource mappings can be added here
       ]
     };
   }

@@ -64,25 +64,49 @@ export class TerraformResourceParser {
     const resources: TerraformResource[] = [];
     const resourceTypes = config.resourceMappings.map(m => m.terraformType);
     
+    console.log(`Parsing ${filePaths.length} files for resource types:`, resourceTypes);
+    
     for (const filePath of filePaths) {
       try {
         // Read file content
         const content = fs.readFileSync(filePath, 'utf8');
         
-        // Parse HCL content
-        const parsedContent = parse(content);
+        try {
+          // Try parsing with HCL parser first
+          console.log(`Parsing file with HCL parser: ${filePath}`);
+          const parsedContent = parse(content);
+          
+          // Extract resources
+          const fileResources = this.extractResourcesFromHCL(parsedContent, filePath, resourceTypes);
+          resources.push(...fileResources);
+          
+          // If HCL parser found resources, skip the regex fallback
+          if (fileResources.length > 0) {
+            continue;
+          }
+          
+          console.log(`HCL parser found no resources in ${filePath}, trying regex fallback`);
+        } catch (hclError) {
+          console.warn(`HCL parser error for ${filePath}, trying regex fallback:`, hclError);
+        }
         
-        // Extract resources
-        const fileResources = this.extractResourcesFromHCL(parsedContent, filePath, resourceTypes);
-        resources.push(...fileResources);
+        // Fallback to regex-based parsing if HCL parser fails or finds no resources
+        const regexResources = this.extractResourcesWithRegex(content, filePath, resourceTypes);
+        resources.push(...regexResources);
+        
       } catch (error) {
-        console.warn(`Error parsing file ${filePath}:`, error);
+        console.warn(`Error processing file ${filePath}:`, error);
         // Continue with other files even if one fails
       }
     }
     
+    console.log(`Total resources found before filtering: ${resources.length}`);
+    
     // Apply configuration filters
-    return this.filterResources(resources, config);
+    const filteredResources = this.filterResources(resources, config);
+    console.log(`Filtered resources count: ${filteredResources.length}`);
+    
+    return filteredResources;
   }
   
   /**
@@ -98,12 +122,18 @@ export class TerraformResourceParser {
     resourceTypes: string[]
   ): TerraformResource[] {
     const resources: TerraformResource[] = [];
+    console.log(`Parsing HCL from ${filePath}, looking for resource types:`, resourceTypes);
     
-    // Handle managed resources (standard format)
+    // Handle managed resources (newer parser format)
     if (parsedHCL.managed_resources) {
+      console.log(`Found managed_resources in ${filePath}:`, Object.keys(parsedHCL.managed_resources));
+      
       for (const [resourceType, resourcesOfType] of Object.entries(parsedHCL.managed_resources)) {
+        console.log(`Resource type: ${resourceType}, Included: ${resourceTypes.includes(resourceType)}`);
+        
         // Skip if not in our resource types list
         if (!resourceTypes.includes(resourceType)) {
+          console.log(`Skipping resource type ${resourceType} - not in config`);
           continue;
         }
         
@@ -111,6 +141,8 @@ export class TerraformResourceParser {
         if (resourcesOfType && typeof resourcesOfType === 'object') {
           for (const [resourceName, resourceData] of Object.entries(resourcesOfType)) {
             if (resourceData && typeof resourceData === 'object') {
+              console.log(`Creating resource: ${resourceType}.${resourceName}`);
+              
               const resource: TerraformResource = {
                 type: resourceType,
                 name: resourceName,
@@ -127,12 +159,76 @@ export class TerraformResourceParser {
       }
     }
     
-    // Handle resources in old format
-    // This code handles the non-managed_resources format which is also common
+    // Handle "resource" block format (common in Terraform files)
+    if (parsedHCL.resource) {
+      console.log(`Found 'resource' block in ${filePath}`);
+      const resourceBlocks = parsedHCL.resource;
+      
+      if (resourceBlocks && typeof resourceBlocks === 'object') {
+        for (const [resourceType, instances] of Object.entries(resourceBlocks)) {
+          console.log(`Resource type in resource block: ${resourceType}, Included: ${resourceTypes.includes(resourceType)}`);
+          
+          // Skip if not in our resource types list
+          if (!resourceTypes.includes(resourceType)) {
+            console.log(`Skipping resource type ${resourceType} in resource block - not in config`);
+            continue;
+          }
+          
+          // Handle both array and object formats
+          if (Array.isArray(instances)) {
+            instances.forEach((instance, index) => {
+              for (const [resourceName, resourceData] of Object.entries(instance)) {
+                if (resourceData && typeof resourceData === 'object') {
+                  console.log(`Creating resource from array: ${resourceType}.${resourceName}`);
+                  
+                  const resource: TerraformResource = {
+                    type: resourceType,
+                    name: resourceName,
+                    attributes: this.flattenAttributes(resourceData),
+                    dependencies: this.extractDependencies(resourceData),
+                    sourceFile: filePath,
+                    id: `${resourceType}.${resourceName}`
+                  };
+                  
+                  resources.push(resource);
+                }
+              }
+            });
+          } else if (typeof instances === 'object') {
+            for (const [resourceName, resourceData] of Object.entries(instances)) {
+              if (resourceData && typeof resourceData === 'object') {
+                console.log(`Creating resource from object: ${resourceType}.${resourceName}`);
+                
+                const resource: TerraformResource = {
+                  type: resourceType,
+                  name: resourceName,
+                  attributes: this.flattenAttributes(resourceData),
+                  dependencies: this.extractDependencies(resourceData),
+                  sourceFile: filePath,
+                  id: `${resourceType}.${resourceName}`
+                };
+                
+                resources.push(resource);
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Handle direct resource types at the root level (old format)
     for (const [key, value] of Object.entries(parsedHCL)) {
-      if (key !== 'managed_resources' && resourceTypes.includes(key) && value && typeof value === 'object') {
+      if (key !== 'managed_resources' && 
+          key !== 'resource' && 
+          resourceTypes.includes(key) && 
+          value && typeof value === 'object') {
+            
+        console.log(`Found direct resource type at root level: ${key}`);
+        
         for (const [resourceName, resourceData] of Object.entries(value)) {
           if (resourceData && typeof resourceData === 'object') {
+            console.log(`Creating resource from root level: ${key}.${resourceName}`);
+            
             const resource: TerraformResource = {
               type: key,
               name: resourceName,
@@ -148,7 +244,131 @@ export class TerraformResourceParser {
       }
     }
     
+    console.log(`Extracted ${resources.length} resources from ${filePath}`);
     return resources;
+  }
+  
+  /**
+   * Extract resources using regex as a fallback when HCL parser fails
+   * @param content The file content
+   * @param filePath Source file path
+   * @param resourceTypes Resource types to include
+   * @returns Array of resources
+   */
+  private extractResourcesWithRegex(
+    content: string,
+    filePath: string,
+    resourceTypes: string[]
+  ): TerraformResource[] {
+    const resources: TerraformResource[] = [];
+    
+    // Match "resource" blocks: resource "type" "name" { ... }
+    // This handles the most common Terraform resource syntax
+    const resourceRegex = /resource\s+"([^"]+)"\s+"([^"]+)"\s+{([^}]*)}/gs;
+    let match;
+    
+    console.log(`Applying regex parser to ${filePath}`);
+    
+    while ((match = resourceRegex.exec(content)) !== null) {
+      const resourceType = match[1];
+      const resourceName = match[2];
+      const resourceBody = match[3];
+      
+      // Check if this resource type is in our config
+      if (!resourceTypes.includes(resourceType)) {
+        console.log(`Regex parser: Skipping resource type ${resourceType} - not in config`);
+        continue;
+      }
+      
+      console.log(`Regex parser: Found resource ${resourceType}.${resourceName}`);
+      
+      // Extract attributes using regex
+      const attributes = this.extractAttributesWithRegex(resourceBody);
+      
+      // Create resource
+      const resource: TerraformResource = {
+        type: resourceType,
+        name: resourceName,
+        attributes: attributes,
+        dependencies: this.extractDependenciesWithRegex(resourceBody),
+        sourceFile: filePath,
+        id: `${resourceType}.${resourceName}`
+      };
+      
+      resources.push(resource);
+    }
+    
+    console.log(`Regex parser extracted ${resources.length} resources from ${filePath}`);
+    return resources;
+  }
+  
+  /**
+   * Extract attributes from resource body using regex
+   * @param resourceBody The resource body content
+   * @returns Attribute map
+   */
+  private extractAttributesWithRegex(resourceBody: string): { [key: string]: any } {
+    const attributes: { [key: string]: any } = {};
+    
+    // Match attributes in the form: key = value
+    // This handles simple attribute assignments
+    const attrRegex = /([a-zA-Z0-9_]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([a-zA-Z0-9_\.]+))/g;
+    let match;
+    
+    while ((match = attrRegex.exec(resourceBody)) !== null) {
+      const key = match[1];
+      // Get value from any of the capture groups
+      const value = match[2] || match[3] || match[4];
+      
+      if (key && value !== undefined) {
+        attributes[key] = value;
+      }
+    }
+    
+    // Also look for tags
+    const tagsRegex = /tags\s*=\s*{([^}]*)}/g;
+    let tagsMatch;
+    
+    while ((tagsMatch = tagsRegex.exec(resourceBody)) !== null) {
+      const tagsBody = tagsMatch[1];
+      const tagAttrRegex = /([a-zA-Z0-9_]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([a-zA-Z0-9_\.]+))/g;
+      let tagMatch;
+      
+      while ((tagMatch = tagAttrRegex.exec(tagsBody)) !== null) {
+        const tagKey = tagMatch[1];
+        const tagValue = tagMatch[2] || tagMatch[3] || tagMatch[4];
+        
+        if (tagKey && tagValue !== undefined) {
+          attributes[`tags.${tagKey}`] = tagValue;
+        }
+      }
+    }
+    
+    return attributes;
+  }
+  
+  /**
+   * Extract dependencies from resource body using regex
+   * @param resourceBody The resource body content
+   * @returns Array of dependency IDs
+   */
+  private extractDependenciesWithRegex(resourceBody: string): string[] {
+    const dependencies: Set<string> = new Set();
+    
+    // Match references like aws_vpc.main.id
+    const refRegex = /\${?\s*([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)(?:\.[a-zA-Z0-9_]+)?\s*}?/g;
+    let match;
+    
+    while ((match = refRegex.exec(resourceBody)) !== null) {
+      const resourceType = match[1];
+      const resourceName = match[2];
+      
+      if (resourceType && resourceName && !resourceType.startsWith('var.')) {
+        dependencies.add(`${resourceType}.${resourceName}`);
+      }
+    }
+    
+    return Array.from(dependencies);
   }
   
   /**
@@ -247,12 +467,26 @@ export class TerraformResourceParser {
     resources: TerraformResource[], 
     config: ResourceMappingConfig
   ): TerraformResource[] {
-    return resources.filter(resource => {
+    console.log(`Filtering ${resources.length} resources based on configuration`);
+    
+    // Track resources by type for diagnostics
+    const resourcesByType: { [type: string]: number } = {};
+    const filteredOutByType: { [type: string]: number } = {};
+    
+    resources.forEach(r => {
+      resourcesByType[r.type] = (resourcesByType[r.type] || 0) + 1;
+    });
+    
+    console.log("Resources by type before filtering:", resourcesByType);
+    
+    const filtered = resources.filter(resource => {
       // Find the matching resource mapping
       const mapping = config.resourceMappings.find(m => m.terraformType === resource.type);
       
       if (!mapping) {
         // No mapping for this resource type
+        console.log(`Filtering out ${resource.id} - no mapping for type ${resource.type}`);
+        filteredOutByType[resource.type] = (filteredOutByType[resource.type] || 0) + 1;
         return false;
       }
       
@@ -260,6 +494,8 @@ export class TerraformResourceParser {
       if (mapping.includePattern) {
         const includeRegex = new RegExp(mapping.includePattern);
         if (!includeRegex.test(resource.name)) {
+          console.log(`Filtering out ${resource.id} - doesn't match include pattern ${mapping.includePattern}`);
+          filteredOutByType[resource.type] = (filteredOutByType[resource.type] || 0) + 1;
           return false;
         }
       }
@@ -268,11 +504,22 @@ export class TerraformResourceParser {
       if (mapping.excludePattern) {
         const excludeRegex = new RegExp(mapping.excludePattern);
         if (excludeRegex.test(resource.name)) {
+          console.log(`Filtering out ${resource.id} - matches exclude pattern ${mapping.excludePattern}`);
+          filteredOutByType[resource.type] = (filteredOutByType[resource.type] || 0) + 1;
           return false;
         }
       }
       
+      // Resource passed all filters
+      console.log(`Including resource ${resource.id} with attributes:`, resource.attributes);
       return true;
     });
+    
+    if (filtered.length === 0 && resources.length > 0) {
+      console.log("All resources were filtered out. Filtered out by type:", filteredOutByType);
+      console.log("Check your mapping configuration against these resource types:", Object.keys(resourcesByType));
+    }
+    
+    return filtered;
   }
 }
