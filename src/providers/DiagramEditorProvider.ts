@@ -1,4 +1,3 @@
-// src/providers/DiagramEditorProvider.ts
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -120,26 +119,6 @@ export class DiagramEditorProvider {
             // In case the webview requests current data (e.g., after reload)
             // But here we don't need to do anything since the initial data is already sent
             return;
-            
-          case 'saveToFile':
-            // Handle explicit save request from webview
-            if (message.content) {
-              this.saveDiagramToFile(message.content)
-                .then(success => {
-                  panel.webview.postMessage({
-                    type: 'saveResult',
-                    success
-                  });
-                })
-                .catch(error => {
-                  panel.webview.postMessage({
-                    type: 'saveResult',
-                    success: false,
-                    error: error.message
-                  });
-                });
-            }
-            return;
         }
       }
     );
@@ -159,46 +138,6 @@ export class DiagramEditorProvider {
     ];
 
     return vscode.Disposable.from(...registrations);
-  }
-
-  /**
-   * Save diagram data to a file
-   * @param diagramData The diagram data to save
-   * @returns Promise resolving to true if save was successful
-   */
-  private static async saveDiagramToFile(diagramData: string): Promise<boolean> {
-    try {
-      // Parse the diagram data to get the name for the file
-      const diagram = JSON.parse(diagramData);
-      const defaultFileName = `${diagram.name || 'diagram'}.diagram`;
-      
-      // Show save dialog
-      const saveUri = await vscode.window.showSaveDialog({
-        defaultUri: vscode.Uri.file(defaultFileName),
-        filters: {
-          'Diagram Files': ['diagram'],
-          'All Files': ['*']
-        },
-        saveLabel: 'Save Diagram'
-      });
-      
-      if (saveUri) {
-        // Write the file
-        await vscode.workspace.fs.writeFile(
-          saveUri,
-          Buffer.from(diagramData, 'utf8')
-        );
-        
-        vscode.window.showInformationMessage(`Diagram saved to ${saveUri.fsPath}`);
-        return true;
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('Error saving diagram to file:', error);
-      vscode.window.showErrorMessage(`Error saving diagram: ${error}`);
-      return false;
-    }
   }
 
   /**
