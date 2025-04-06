@@ -25,6 +25,10 @@
         "command": "extension-test.createDiagramFromSelected",
         "title": "Create Diagram from Selected File",
         "icon": "$(add)"
+      },
+      {
+        "command": "extension-test.editResourceMappingConfig",
+        "title": "Edit Resource Mapping Configuration"
       }
     ],
     "viewsContainers": {
@@ -51,9 +55,26 @@
           "command": "extension-test.createDiagramFromSelected",
           "when": "view == extension-test.terraformFiles",
           "group": "navigation"
+        },
+        {
+          "command": "extension-test.editResourceMappingConfig",
+          "when": "view == extension-test.terraformFiles",
+          "group": "navigation"
         }
       ]
-    }
+    },
+    "customEditors": [
+      {
+        "viewType": "extension-test.diagramEditor",
+        "displayName": "Diagram Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.diagram"
+          }
+        ],
+        "priority": "default"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "yarn run compile && yarn run build-editor",
