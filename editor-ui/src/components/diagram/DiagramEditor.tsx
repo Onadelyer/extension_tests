@@ -33,7 +33,7 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({
     }
   }, [initialDiagram, setDiagram]);
 
-  // Update the diagram in parent component (memory only)
+  // Update the diagram state only, not saving to file
   const handleUpdate = () => {
     if (onUpdate && diagram) {
       try {
@@ -52,7 +52,7 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({
     setDiagramName(e.target.value);
   };
 
-  // Update parent component when name changes or after delay
+  // Update state when name changes or after delay
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       handleUpdate();
@@ -99,7 +99,7 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({
               onBlur={(e) => {
                 e.target.style.backgroundColor = 'transparent';
                 e.target.style.borderColor = 'transparent';
-                handleUpdate(); // Update when focus is lost
+                handleUpdate(); // Update state when focus is lost
               }}
             />
           </div>

@@ -61,12 +61,12 @@
           "group": "navigation"
         },
         {
-          "command": "extension-test.editResourceMappingConfig",
+          "command": "extension-test.runTerraformDiagnostics",
           "when": "view == extension-test.terraformFiles",
           "group": "navigation"
         },
         {
-          "command": "extension-test.runTerraformDiagnostics",
+          "command": "extension-test.editResourceMappingConfig",
           "when": "view == extension-test.terraformFiles",
           "group": "navigation"
         }
