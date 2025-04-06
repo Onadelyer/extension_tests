@@ -33,7 +33,7 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({
     }
   }, [initialDiagram, setDiagram]);
 
-  // Update the diagram in parent component
+  // Update the diagram in parent component (memory only)
   const handleUpdate = () => {
     if (onUpdate && diagram) {
       try {

@@ -46,7 +46,7 @@ function App() {
             const diagramData = JSON.parse(message.content);
             setDiagram(diagramData);
             
-            // Save to state
+            // Save to webview state (this is not saving to filesystem)
             vscode.setState({ diagram: diagramData });
             
             // Clear any errors
@@ -79,11 +79,12 @@ function App() {
 
   // Handle diagram update
   const handleUpdateDiagram = (updatedDiagram: DiagramData) => {
-    // Save to state
+    // Save to webview state only (not filesystem)
     vscode.setState({ diagram: updatedDiagram });
     setDiagram(updatedDiagram);
     
     // Send the updated diagram back to the extension
+    // Note: We're only updating the extension's in-memory state, not saving to filesystem
     vscode.postMessage({
       type: 'update',
       content: JSON.stringify(updatedDiagram, null, 2)
