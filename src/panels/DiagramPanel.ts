@@ -9,6 +9,11 @@ import { EC2InstanceComponent } from '../models/aws/components/EC2InstanceCompon
 import { TerraformParser } from '../parsers/TerraformParser';
 import { RelationshipType } from '../models/aws/ComponentRelationship';
 
+import { ResourceMappingConfigManager } from '../config/ResourceMappingConfig';
+import { TerraformResourceParser, TerraformResource } from '../parsers/TerraformResourceParser';
+import { TerraformToDiagramConverter } from '../converters/TerraformToDiagramConverter';
+import { ComponentRelationship } from '../models/aws/ComponentRelationship';
+
 // Initialize the component registry
 AwsComponentRegistry.initialize();
 
@@ -143,13 +148,31 @@ async function populateDiagramFromTerraformFile(diagram: DiagramModel, filePath:
     const parser = new TerraformParser();
     const allDependentFiles = await parser.getAllDependentFileUris(filePath);
     
-    // Load all files content
-    for (const dependentFile of allDependentFiles) {
-      await parseResourcesAndAddToModel(dependentFile, diagram);
-    }
+    // Load resource mapping config
+    const resourceMappingConfig = await ResourceMappingConfigManager.loadConfig();
     
-    // Create component relationships
-    createComponentRelationships(diagram);
+    // Create resource parser with the config
+    const resourceParser = new TerraformResourceParser();
+    
+    // Use ResourceMappingConfig to parse and convert resources
+    const resources = await resourceParser.parseResourcesFromFiles(
+      allDependentFiles, 
+      resourceMappingConfig
+    );
+    
+    // Convert resources to diagram components
+    const converter = new TerraformToDiagramConverter(resources, resourceMappingConfig);
+    const convertedDiagram = converter.convert(path.basename(filePath));
+    
+    // Copy components and relationships to the original diagram
+    convertedDiagram.region.children.forEach(component => {
+      diagram.addComponent(component);
+    });
+    
+    convertedDiagram.relationships.forEach(rel => {
+      diagram.addRelationship(rel.sourceId, rel.targetId, rel.type, rel.label);
+    });
+        
   } catch (error) {
     console.error('Error parsing Terraform files:', error);
     throw error;

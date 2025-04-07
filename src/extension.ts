@@ -57,11 +57,55 @@ export function activate(context: vscode.ExtensionContext) {
   
   // Register diagram commands 
   context.subscriptions.push(
-    vscode.commands.registerCommand('extension-test.createDiagram', () => {
-      try {
-        openDiagramPanel(context);
+    vscode.commands.registerCommand('extension-test.createDiagram', async () => {
+      try {        
+        // Check if there's a selected file in the tree view
+        const selectedItems = treeView.selection;
+        let selectedFile = selectedItems.length > 0 && selectedItems[0].resourceUri ? 
+                            selectedItems[0].resourceUri : undefined;
+        
+        // If no file is selected, prompt the user to select one
+        if (!selectedFile) {          
+          // Find Terraform files in the workspace
+          const tfFiles = await vscode.workspace.findFiles('**/*.tf', '**/node_modules/**');
+          
+          if (tfFiles.length === 0) {
+            vscode.window.showInformationMessage('No Terraform files found in the workspace');
+            return;
+          }
+          
+          // Create QuickPick items with relative paths for better readability
+          const items = await Promise.all(tfFiles.map(async (file) => {
+            const workspaceFolder = vscode.workspace.getWorkspaceFolder(file);
+            const relativePath = workspaceFolder ? 
+              path.relative(workspaceFolder.uri.fsPath, file.fsPath) : file.fsPath;
+              
+            return {
+              label: relativePath,
+              description: file.fsPath,
+              uri: file
+            };
+          }));
+          
+          // Show QuickPick to let user select a file
+          const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select a Terraform file to create diagram from'
+          });
+          
+          if (!selected) {
+            return; // User cancelled the selection
+          }
+          
+          selectedFile = selected.uri;
+        }
+        
+        if (selectedFile && selectedFile.fsPath.endsWith('.tf')) {
+          // Pass the source file to the diagram panel
+          openDiagramPanel(context, { source: selectedFile.fsPath });
+        } else {
+          vscode.window.showInformationMessage('Please select a Terraform file first');
+        }
       } catch (error) {
-        console.error('Error opening diagram panel:', error);
         vscode.window.showErrorMessage(`Error opening diagram: ${error}`);
       }
     })
