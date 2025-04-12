@@ -60,22 +60,8 @@ export async function generateDependencyTree(
             // Handle Terraform files
             output.appendLine(`${itemPrefix}${name}`);
             
-            // Extract resources from the file
             try {
-                const resources = await extractTerraformResources(itemUri.fsPath);
                 const fileInfo = await parser.buildFileDependencyTree(itemUri.fsPath);
-                
-                // Display resources
-                if (resources.length > 0) {
-                    for (let j = 0; j < resources.length; j++) {
-                        const resource = resources[j];
-                        const resourceIsLast = j === resources.length - 1 && 
-                                             (!fileInfo.dependencies || fileInfo.dependencies.length === 0);
-                        const resourcePrefix = resourceIsLast ? `${childPrefix}└── ` : `${childPrefix}├── `;
-                        
-                        output.appendLine(`${resourcePrefix}${resource.type}.${resource.name}`);
-                    }
-                }
                 
                 // Display file dependencies
                 if (fileInfo.dependencies && fileInfo.dependencies.length > 0) {
@@ -84,23 +70,77 @@ export async function generateDependencyTree(
                         const depIsLast = j === fileInfo.dependencies.length - 1;
                         const depPrefix = depIsLast ? `${childPrefix}└── ` : `${childPrefix}├── `;
                         
-                        if (dep.isModule) {
-                            output.appendLine(`${depPrefix}module.${dep.moduleName || 'unknown'}`);
+                        if (dep.isModule && dep.moduleName) {
+                            // Display module folder name
+                            output.appendLine(`${depPrefix}${dep.moduleName}`);
+                            
+                            // Path to module directory
+                            const moduleDirPath = path.dirname(dep.path);
+                            const modulePrefix = childPrefix + (depIsLast ? '    ' : '│   ');
+                            
+                            // List common terraform files in the module directory
+                            const commonFiles = ['variables.tf', 'main.tf', 'outputs.tf'];
+                            const foundCommonFiles = [];
+                            
+                            // Check if these files exist
+                            for (const fileName of commonFiles) {
+                                const filePath = path.join(moduleDirPath, fileName);
+                                if (fs.existsSync(filePath)) {
+                                    foundCommonFiles.push(fileName);
+                                }
+                            }
+                            
+                            // Display common files
+                            for (let k = 0; k < foundCommonFiles.length; k++) {
+                                const commonFileName = foundCommonFiles[k];
+                                const fileIsLast = k === foundCommonFiles.length - 1 && 
+                                                (!dep.dependencies || dep.dependencies.length === 0);
+                                const filePrefix = `${modulePrefix}${fileIsLast ? '└── ' : '├── '}`;
+                                output.appendLine(`${filePrefix}${commonFileName}`);
+                            }
+                            
+                            // List any sub-modules if they exist
+                            if (dep.dependencies && dep.dependencies.length > 0) {
+                                const submoduleDirName = 'modules';
+                                const submoduleIsLast = true;
+                                const submodulePrefix = `${modulePrefix}${submoduleIsLast ? '└── ' : '├── '}`;
+                                output.appendLine(`${submodulePrefix}${submoduleDirName}`);
+                                
+                                const submoduleNestedPrefix = modulePrefix + (submoduleIsLast ? '    ' : '│   ');
+                                
+                                // Display each sub-module
+                                for (let k = 0; k < dep.dependencies.length; k++) {
+                                    const submodule = dep.dependencies[k];
+                                    const subIsLast = k === dep.dependencies.length - 1;
+                                    const subPrefix = `${submoduleNestedPrefix}${subIsLast ? '└── ' : '├── '}`;
+                                    
+                                    if (submodule.isModule) {
+                                        output.appendLine(`${subPrefix}${submodule.name}`);
+                                        
+                                        // For sub-modules, display their common files too
+                                        const subModuleDirPath = path.dirname(submodule.path);
+                                        const subModuleNestedPrefix = submoduleNestedPrefix + (subIsLast ? '    ' : '│   ');
+                                        
+                                        // Check for common files in the sub-module
+                                        const subFoundCommonFiles = [];
+                                        for (const fileName of commonFiles) {
+                                            const filePath = path.join(subModuleDirPath, fileName);
+                                            if (fs.existsSync(filePath)) {
+                                                subFoundCommonFiles.push(fileName);
+                                            }
+                                        }
+                                        
+                                        // Display common files for sub-module
+                                        for (let l = 0; l < subFoundCommonFiles.length; l++) {
+                                            const commonFileName = subFoundCommonFiles[l];
+                                            const fileIsLast = l === subFoundCommonFiles.length - 1;
+                                            const filePrefix = `${subModuleNestedPrefix}${fileIsLast ? '└── ' : '├── '}`;
+                                            output.appendLine(`${filePrefix}${commonFileName}`);
+                                        }
+                                    }
+                                }
+                            }
                         }
-                    }
-                }
-                
-                // Display outputs
-                if (fileInfo.outputs && fileInfo.outputs.length > 0) {
-                    const outputsPrefix = (fileInfo.dependencies && fileInfo.dependencies.length > 0) ? 
-                        `${childPrefix}│   ` : childPrefix;
-                    
-                    for (let j = 0; j < fileInfo.outputs.length; j++) {
-                        const outputName = fileInfo.outputs[j];
-                        const outputIsLast = j === fileInfo.outputs.length - 1;
-                        const outputPrefix = outputIsLast ? `${outputsPrefix}└── ` : `${outputsPrefix}├── `;
-                        
-                        output.appendLine(`${outputPrefix}${outputName}`);
                     }
                 }
             } catch (error) {
@@ -152,39 +192,8 @@ export async function generateDirectoryTree(
             // Recursively process subdirectory
             await generateDirectoryTree(itemUri, output, childPrefix, parser);
         } else if (type === vscode.FileType.File && name.endsWith('.tf')) {
-            // Handle Terraform files
+            // Handle Terraform files - just show the filename
             output.appendLine(`${itemPrefix}${name}`);
-            
-            try {
-                // Extract resources from the file
-                const resources = await extractTerraformResources(itemUri.fsPath);
-                const fileInfo = await parser.buildFileDependencyTree(itemUri.fsPath);
-                
-                // Display resources
-                if (resources.length > 0) {
-                    for (let j = 0; j < resources.length; j++) {
-                        const resource = resources[j];
-                        const resourceIsLast = j === resources.length - 1 && 
-                                             (!fileInfo.outputs || fileInfo.outputs.length === 0);
-                        const resourcePrefix = resourceIsLast ? `${childPrefix}└── ` : `${childPrefix}├── `;
-                        
-                        output.appendLine(`${resourcePrefix}${resource.type}.${resource.name}`);
-                    }
-                }
-                
-                // Display outputs
-                if (fileInfo.outputs && fileInfo.outputs.length > 0) {
-                    for (let j = 0; j < fileInfo.outputs.length; j++) {
-                        const outputName = fileInfo.outputs[j];
-                        const outputIsLast = j === fileInfo.outputs.length - 1;
-                        const outputPrefix = outputIsLast ? `${childPrefix}└── ` : `${childPrefix}├── `;
-                        
-                        output.appendLine(`${outputPrefix}${outputName}`);
-                    }
-                }
-            } catch (error) {
-                console.error(`Error processing file ${itemUri.fsPath}:`, error);
-            }
         }
     }
 }
@@ -211,60 +220,86 @@ export async function displayFileDependencyTree(
     // Display the file
     output.appendLine(`${itemPrefix}${fileInfo.name}`);
     
-    // Extract resources from the file
     try {
-        // We'll need to track if we have any items to determine if next items are the last
-        const resourcesCount = fileInfo.resources?.length || 0;
-        const outputsCount = fileInfo.outputs?.length || 0;
-        const dependenciesCount = fileInfo.dependencies?.length || 0;
-        const totalItems = resourcesCount + outputsCount + dependenciesCount;
-        
-        let itemsProcessed = 0;
-        
-        // Display resources
-        if (fileInfo.resources && fileInfo.resources.length > 0) {
-            for (let i = 0; i < fileInfo.resources.length; i++) {
-                const resource = fileInfo.resources[i];
-                itemsProcessed++;
-                const resourceIsLast = itemsProcessed === totalItems;
-                const resourcePrefix = resourceIsLast ? `${childPrefix}└── ` : `${childPrefix}├── `;
-                
-                output.appendLine(`${resourcePrefix}${resource}`);
-            }
-        }
-        
-        // Display outputs
-        if (fileInfo.outputs && fileInfo.outputs.length > 0) {
-            for (let i = 0; i < fileInfo.outputs.length; i++) {
-                const outputName = fileInfo.outputs[i];
-                itemsProcessed++;
-                const outputIsLast = itemsProcessed === totalItems;
-                const outputPrefix = outputIsLast ? `${childPrefix}└── ` : `${childPrefix}├── `;
-                
-                output.appendLine(`${outputPrefix}${outputName}`);
-            }
-        }
-        
         // Process and display dependencies
         if (fileInfo.dependencies && fileInfo.dependencies.length > 0) {
             for (let i = 0; i < fileInfo.dependencies.length; i++) {
                 const dependency = fileInfo.dependencies[i];
-                itemsProcessed++;
-                const depIsLast = itemsProcessed === totalItems;
+                const depIsLast = i === fileInfo.dependencies.length - 1;
                 
-                // Display module prefix if it's a module
+                // Special handling for modules - display their file structure
                 if (dependency.isModule && dependency.moduleName) {
+                    // Create a module folder entry
                     const modulePrefix = `${childPrefix}${depIsLast ? '└── ' : '├── '}`;
-                    output.appendLine(`${modulePrefix}module.${dependency.moduleName}`);
+                    const moduleFolderName = dependency.moduleName;
+                    output.appendLine(`${modulePrefix}${moduleFolderName}`);
                     
-                    // Display module file with increased indentation
-                    await displayFileDependencyTree(
-                        dependency, 
-                        output, 
-                        childPrefix + (depIsLast ? '    ' : '│   '), 
-                        true,
-                        parser
-                    );
+                    // Path to module directory
+                    const moduleDirPath = path.dirname(dependency.path);
+                    const moduleNestedPrefix = childPrefix + (depIsLast ? '    ' : '│   ');
+                    
+                    // List common terraform files in the module directory
+                    const commonFiles = ['variables.tf', 'main.tf', 'outputs.tf'];
+                    const foundCommonFiles = [];
+                    
+                    // Check if these files exist
+                    for (const fileName of commonFiles) {
+                        const filePath = path.join(moduleDirPath, fileName);
+                        if (fs.existsSync(filePath)) {
+                            foundCommonFiles.push(fileName);
+                        }
+                    }
+                    
+                    // Display common files
+                    for (let j = 0; j < foundCommonFiles.length; j++) {
+                        const commonFileName = foundCommonFiles[j];
+                        const fileIsLast = j === foundCommonFiles.length - 1 && 
+                                        (!dependency.dependencies || dependency.dependencies.length === 0);
+                        const filePrefix = `${moduleNestedPrefix}${fileIsLast ? '└── ' : '├── '}`;
+                        output.appendLine(`${filePrefix}${commonFileName}`);
+                    }
+                    
+                    // List any sub-modules if they exist
+                    if (dependency.dependencies && dependency.dependencies.length > 0) {
+                        const submoduleDirName = 'modules';
+                        const submoduleIsLast = true;
+                        const submodulePrefix = `${moduleNestedPrefix}${submoduleIsLast ? '└── ' : '├── '}`;
+                        output.appendLine(`${submodulePrefix}${submoduleDirName}`);
+                        
+                        const submoduleNestedPrefix = moduleNestedPrefix + (submoduleIsLast ? '    ' : '│   ');
+                        
+                        // Display each sub-module
+                        for (let j = 0; j < dependency.dependencies.length; j++) {
+                            const submodule = dependency.dependencies[j];
+                            const subIsLast = j === dependency.dependencies.length - 1;
+                            const subPrefix = `${submoduleNestedPrefix}${subIsLast ? '└── ' : '├── '}`;
+                            
+                            if (submodule.isModule) {
+                                output.appendLine(`${subPrefix}${submodule.name}`);
+                                
+                                // For sub-modules, display their common files too
+                                const subModuleDirPath = path.dirname(submodule.path);
+                                const subModuleNestedPrefix = submoduleNestedPrefix + (subIsLast ? '    ' : '│   ');
+                                
+                                // Check for common files in the sub-module
+                                const subFoundCommonFiles = [];
+                                for (const fileName of commonFiles) {
+                                    const filePath = path.join(subModuleDirPath, fileName);
+                                    if (fs.existsSync(filePath)) {
+                                        subFoundCommonFiles.push(fileName);
+                                    }
+                                }
+                                
+                                // Display common files for sub-module
+                                for (let k = 0; k < subFoundCommonFiles.length; k++) {
+                                    const commonFileName = subFoundCommonFiles[k];
+                                    const fileIsLast = k === subFoundCommonFiles.length - 1;
+                                    const filePrefix = `${subModuleNestedPrefix}${fileIsLast ? '└── ' : '├── '}`;
+                                    output.appendLine(`${filePrefix}${commonFileName}`);
+                                }
+                            }
+                        }
+                    }
                 } else {
                     // Regular file dependency
                     await displayFileDependencyTree(

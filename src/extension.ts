@@ -183,7 +183,7 @@ export function activate(context: vscode.ExtensionContext) {
             } else if (stats.type === vscode.FileType.File && targetUri!.fsPath.endsWith('.tf')) {
               // If it's a Terraform file, analyze just that file and its dependencies
               const fileName = path.basename(targetUri!.fsPath);
-              outputChannel.appendLine(`Analyzing file: ${fileName}`);
+              outputChannel.appendLine(`${fileName} file selected`);
               outputChannel.appendLine('');
               
               // Build file dependency tree
