@@ -3,6 +3,8 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { TerraformParser, FileInfo } from '../parsers/TerraformParser';
+import { TerraformResourceParser } from '../parsers/TerraformResourceParser';
+import { ResourceMappingConfig, ResourceMappingConfigManager, ResourceMapping } from '../config/ResourceMappingConfig';
 
 /**
  * Represents a Terraform resource
@@ -18,11 +20,13 @@ export interface TerraformResource {
  * @param dirUri The directory URI to analyze
  * @param output The output channel to write to
  * @param parser The TerraformParser instance
+ * @param shouldFilter Whether to filter resources based on config
  */
 export async function generateDependencyTree(
     dirUri: vscode.Uri, 
     output: vscode.OutputChannel,
-    parser: TerraformParser
+    parser: TerraformParser,
+    shouldFilter: boolean = true
 ): Promise<void> {
     // Get all entries in the directory
     const entries = await vscode.workspace.fs.readDirectory(dirUri);
@@ -55,13 +59,16 @@ export async function generateDependencyTree(
             output.appendLine(`${itemPrefix}${name}`);
             
             // Recursively process subdirectory
-            await generateDirectoryTree(itemUri, output, childPrefix, parser);
+            await generateDirectoryTree(itemUri, output, childPrefix, parser, shouldFilter);
         } else if (type === vscode.FileType.File && name.endsWith('.tf')) {
             // Handle Terraform files
             output.appendLine(`${itemPrefix}${name}`);
             
             try {
                 const fileInfo = await parser.buildFileDependencyTree(itemUri.fsPath);
+                
+                // Display file resources
+                await displayFileResources(itemUri.fsPath, output, childPrefix, shouldFilter);
                 
                 // Display file dependencies
                 if (fileInfo.dependencies && fileInfo.dependencies.length > 0) {
@@ -97,6 +104,13 @@ export async function generateDependencyTree(
                                                 (!dep.dependencies || dep.dependencies.length === 0);
                                 const filePrefix = `${modulePrefix}${fileIsLast ? '└── ' : '├── '}`;
                                 output.appendLine(`${filePrefix}${commonFileName}`);
+                                
+                                // Display resources for this file
+                                const filePath = path.join(moduleDirPath, commonFileName);
+                                if (fs.existsSync(filePath)) {
+                                    const fileResourcePrefix = modulePrefix + (fileIsLast ? '    ' : '│   ');
+                                    await displayFileResources(filePath, output, fileResourcePrefix, shouldFilter);
+                                }
                             }
                             
                             // List any sub-modules if they exist
@@ -136,6 +150,13 @@ export async function generateDependencyTree(
                                             const fileIsLast = l === subFoundCommonFiles.length - 1;
                                             const filePrefix = `${subModuleNestedPrefix}${fileIsLast ? '└── ' : '├── '}`;
                                             output.appendLine(`${filePrefix}${commonFileName}`);
+                                            
+                                            // Display resources for this sub-module file
+                                            const filePath = path.join(subModuleDirPath, commonFileName);
+                                            if (fs.existsSync(filePath)) {
+                                                const fileResourcePrefix = subModuleNestedPrefix + (fileIsLast ? '    ' : '│   ');
+                                                await displayFileResources(filePath, output, fileResourcePrefix, shouldFilter);
+                                            }
                                         }
                                     }
                                 }
@@ -156,12 +177,14 @@ export async function generateDependencyTree(
  * @param output The output channel to write to
  * @param prefix The prefix for indentation and tree structure
  * @param parser The TerraformParser instance
+ * @param shouldFilter Whether to filter resources based on config
  */
 export async function generateDirectoryTree(
     dirUri: vscode.Uri, 
     output: vscode.OutputChannel,
     prefix: string,
-    parser: TerraformParser
+    parser: TerraformParser,
+    shouldFilter: boolean = true
 ): Promise<void> {
     // Get all entries in the directory
     const entries = await vscode.workspace.fs.readDirectory(dirUri);
@@ -190,7 +213,7 @@ export async function generateDirectoryTree(
             output.appendLine(`${itemPrefix}${name}`);
             
             // Recursively process subdirectory
-            await generateDirectoryTree(itemUri, output, childPrefix, parser);
+            await generateDirectoryTree(itemUri, output, childPrefix, parser, shouldFilter);
         } else if (type === vscode.FileType.File && name.endsWith('.tf')) {
             // Handle Terraform files - just show the filename
             output.appendLine(`${itemPrefix}${name}`);
@@ -205,13 +228,15 @@ export async function generateDirectoryTree(
  * @param prefix The prefix for indentation and tree structure
  * @param isLast Whether this is the last item in its parent list
  * @param parser The TerraformParser instance
+ * @param shouldFilter Whether to filter resources based on config
  */
 export async function displayFileDependencyTree(
     fileInfo: FileInfo,
     output: vscode.OutputChannel,
     prefix: string,
     isLast: boolean,
-    parser: TerraformParser
+    parser: TerraformParser,
+    shouldFilter: boolean = true
 ): Promise<void> {
     // Determine prefixes
     const itemPrefix = prefix + (isLast ? '└── ' : '├── ');
@@ -221,6 +246,9 @@ export async function displayFileDependencyTree(
     output.appendLine(`${itemPrefix}${fileInfo.name}`);
     
     try {
+        // Parse resources in this file and display them
+        await displayFileResources(fileInfo.path, output, childPrefix, shouldFilter);
+        
         // Process and display dependencies
         if (fileInfo.dependencies && fileInfo.dependencies.length > 0) {
             for (let i = 0; i < fileInfo.dependencies.length; i++) {
@@ -246,17 +274,22 @@ export async function displayFileDependencyTree(
                     for (const fileName of commonFiles) {
                         const filePath = path.join(moduleDirPath, fileName);
                         if (fs.existsSync(filePath)) {
-                            foundCommonFiles.push(fileName);
+                            foundCommonFiles.push(filePath);
                         }
                     }
                     
                     // Display common files
-                    for (let j = 0; j < foundCommonFiles.length; j++) {
-                        const commonFileName = foundCommonFiles[j];
-                        const fileIsLast = j === foundCommonFiles.length - 1 && 
-                                        (!dependency.dependencies || dependency.dependencies.length === 0);
+                    for (let k = 0; k < foundCommonFiles.length; k++) {
+                        const filePath = foundCommonFiles[k];
+                        const fileName = path.basename(filePath);
+                        const fileIsLast = k === foundCommonFiles.length - 1 && 
+                                          (!dependency.dependencies || dependency.dependencies.length === 0);
                         const filePrefix = `${moduleNestedPrefix}${fileIsLast ? '└── ' : '├── '}`;
-                        output.appendLine(`${filePrefix}${commonFileName}`);
+                        output.appendLine(`${filePrefix}${fileName}`);
+                        
+                        // Parse and display resources for this module file
+                        const fileResourcePrefix = `${moduleNestedPrefix}${fileIsLast ? '    ' : '│   '}`;
+                        await displayFileResources(filePath, output, fileResourcePrefix, shouldFilter);
                     }
                     
                     // List any sub-modules if they exist
@@ -269,9 +302,9 @@ export async function displayFileDependencyTree(
                         const submoduleNestedPrefix = moduleNestedPrefix + (submoduleIsLast ? '    ' : '│   ');
                         
                         // Display each sub-module
-                        for (let j = 0; j < dependency.dependencies.length; j++) {
-                            const submodule = dependency.dependencies[j];
-                            const subIsLast = j === dependency.dependencies.length - 1;
+                        for (let k = 0; k < dependency.dependencies.length; k++) {
+                            const submodule = dependency.dependencies[k];
+                            const subIsLast = k === dependency.dependencies.length - 1;
                             const subPrefix = `${submoduleNestedPrefix}${subIsLast ? '└── ' : '├── '}`;
                             
                             if (submodule.isModule) {
@@ -286,34 +319,117 @@ export async function displayFileDependencyTree(
                                 for (const fileName of commonFiles) {
                                     const filePath = path.join(subModuleDirPath, fileName);
                                     if (fs.existsSync(filePath)) {
-                                        subFoundCommonFiles.push(fileName);
+                                        subFoundCommonFiles.push(filePath);
                                     }
                                 }
                                 
                                 // Display common files for sub-module
-                                for (let k = 0; k < subFoundCommonFiles.length; k++) {
-                                    const commonFileName = subFoundCommonFiles[k];
-                                    const fileIsLast = k === subFoundCommonFiles.length - 1;
+                                for (let l = 0; l < subFoundCommonFiles.length; l++) {
+                                    const filePath = subFoundCommonFiles[l];
+                                    const fileName = path.basename(filePath);
+                                    const fileIsLast = l === subFoundCommonFiles.length - 1;
                                     const filePrefix = `${subModuleNestedPrefix}${fileIsLast ? '└── ' : '├── '}`;
-                                    output.appendLine(`${filePrefix}${commonFileName}`);
+                                    output.appendLine(`${filePrefix}${fileName}`);
+                                    
+                                    // Parse and display resources for this sub-module file
+                                    const fileResourcePrefix = `${subModuleNestedPrefix}${fileIsLast ? '    ' : '│   '}`;
+                                    await displayFileResources(filePath, output, fileResourcePrefix, shouldFilter);
                                 }
                             }
                         }
                     }
                 } else {
-                    // Regular file dependency
+                    // Regular file dependency - handle normal files that aren't modules
                     await displayFileDependencyTree(
-                        dependency, 
-                        output, 
-                        childPrefix, 
+                        dependency,
+                        output,
+                        childPrefix,
                         depIsLast,
-                        parser
+                        parser,
+                        shouldFilter
                     );
                 }
             }
         }
     } catch (error) {
-        console.error(`Error processing file ${fileInfo.path}:`, error);
+        console.error(`Error processing file dependencies for ${fileInfo.path}:`, error);
+    }
+}
+
+/**
+ * Parse and display Terraform resources in a file
+ * @param filePath Path to the Terraform file
+ * @param output Output channel to write to
+ * @param prefix Prefix for indentation and tree structure
+ * @param shouldFilter Whether to filter resources based on config
+ */
+async function displayFileResources(
+    filePath: string,
+    output: vscode.OutputChannel,
+    prefix: string,
+    shouldFilter: boolean = true
+): Promise<void> {
+    try {
+        // Extract resources from the file
+        const allResources = await extractTerraformResources(filePath);
+        
+        let resourcesToDisplay = allResources;
+        
+        // Filter resources if requested
+        if (shouldFilter) {
+            // Load resource mapping config
+            const config = await ResourceMappingConfigManager.loadConfig();
+            
+            // Get allowed resource types from config
+            const allowedResourceTypes = config.resourceMappings.map(mapping => mapping.terraformType);
+            
+            // Filter resources based on config
+            resourcesToDisplay = allResources.filter(resource => {
+                // Check if resource type is in the allowed list
+                const isAllowedType = allowedResourceTypes.includes(resource.type);
+                
+                // Find the resource mapping for this type
+                const resourceMapping = config.resourceMappings.find(mapping => 
+                    mapping.terraformType === resource.type
+                );
+                
+                if (!resourceMapping) {
+                    return false; // Skip if resource type not in config
+                }
+                
+                // Check include/exclude patterns if specified
+                if (resourceMapping.includePattern) {
+                    const includeRegex = new RegExp(resourceMapping.includePattern);
+                    if (!includeRegex.test(resource.name)) {
+                        return false; // Skip if doesn't match include pattern
+                    }
+                }
+                
+                if (resourceMapping.excludePattern) {
+                    const excludeRegex = new RegExp(resourceMapping.excludePattern);
+                    if (excludeRegex.test(resource.name)) {
+                        return false; // Skip if matches exclude pattern
+                    }
+                }
+                
+                return isAllowedType;
+            });
+        }
+        
+        if (resourcesToDisplay.length > 0) {
+            const resourcePrefix = `${prefix}├── Resources:`;
+            output.appendLine(resourcePrefix);
+            
+            // Display each resource
+            for (let i = 0; i < resourcesToDisplay.length; i++) {
+                const resource = resourcesToDisplay[i];
+                const isLastResource = i === resourcesToDisplay.length - 1;
+                const resourceItemPrefix = `${prefix}${isLastResource ? '    └── ' : '    ├── '}`;
+                output.appendLine(`${resourceItemPrefix}${resource.type}.${resource.name}`);
+            }
+        }
+    } catch (error) {
+        console.error(`Error displaying resources for ${filePath}:`, error);
     }
 }
 
@@ -326,38 +442,43 @@ export async function extractTerraformResources(filePath: string): Promise<Terra
     // Read the file content
     const content = fs.readFileSync(filePath, 'utf8');
     
-    // Try using the HCL parser if available
+    // Try using the HCL parser
     try {
-        // Attempt to use @evops/hcl-terraform-parser
+        // Use @evops/hcl-terraform-parser
         const { parse } = require('@evops/hcl-terraform-parser');
         const parsed = parse(content);
         
         const resources: TerraformResource[] = [];
         
-        // Check if we have managed_resources in the parsed output (newer parser format)
+        // Check if we have managed_resources in the parsed output
         if (parsed.managed_resources) {
-            // Process managed resources (newer format)
-            for (const [resourceType, resourceInstances] of Object.entries(parsed.managed_resources)) {
-                for (const [resourceName, resourceConfig] of Object.entries(resourceInstances as Record<string, any>)) {
+            // Process managed resources
+            for (const [key, value] of Object.entries(parsed.managed_resources)) {
+                // Key should be in format "type.name"
+                const parts = key.split('.');
+                if (parts.length >= 2) {
+                    const type = parts[0];
+                    const name = parts[1];
+                    
                     resources.push({
-                        type: resourceType,
-                        name: resourceName,
-                        config: resourceConfig || {}
+                        type,
+                        name,
+                        config: value as Record<string, any>
                     });
                 }
             }
-        } else {
-            // Process resource blocks directly
-            for (const [key, value] of Object.entries(parsed)) {
-                if (key === 'resource' && typeof value === 'object') {
-                    for (const [resourceType, resourceInstances] of Object.entries(value as Record<string, any>)) {
-                        for (const [resourceName, resourceConfig] of Object.entries(resourceInstances as Record<string, any>)) {
-                            resources.push({
-                                type: resourceType,
-                                name: resourceName,
-                                config: resourceConfig || {}
-                            });
-                        }
+        }
+        
+        // Also check for resource blocks directly (older format)
+        if (parsed.resource && typeof parsed.resource === 'object') {
+            for (const [resourceType, resourceInstances] of Object.entries(parsed.resource)) {
+                if (typeof resourceInstances === 'object') {
+                    for (const [resourceName, resourceConfig] of Object.entries(resourceInstances as Record<string, any>)) {
+                        resources.push({
+                            type: resourceType,
+                            name: resourceName,
+                            config: resourceConfig || {}
+                        });
                     }
                 }
             }
@@ -381,5 +502,65 @@ export async function extractTerraformResources(filePath: string): Promise<Terra
         }
         
         return resources;
+    }
+}
+
+/**
+ * Display the list of available resource mappings from the configuration
+ * @param output The output channel to write to
+ */
+export async function displayResourceMappings(output: vscode.OutputChannel): Promise<void> {
+    try {
+        // Load the resource mapping config
+        const config = await ResourceMappingConfigManager.loadConfig();
+        
+        // Sort resource mappings by type for easier reading
+        const sortedMappings = [...config.resourceMappings].sort((a, b) => 
+            a.terraformType.localeCompare(b.terraformType)
+        );
+        
+        if (sortedMappings.length === 0) {
+            output.appendLine('\nNo resource mappings defined in configuration.');
+            return;
+        }
+        
+        // Calculate column widths for better alignment
+        const terraformTypeWidth = Math.max(
+            ...sortedMappings.map(m => m.terraformType.length),
+            "Terraform Resource Type".length
+        );
+        const componentTypeWidth = Math.max(
+            ...sortedMappings.map(m => m.componentType.length),
+            "Component Type".length
+        );
+        
+        // Display header
+        output.appendLine('\nAvailable Resource Mappings:');
+        
+        // Table header
+        const headerLine = 
+            `| ${"Terraform Resource Type".padEnd(terraformTypeWidth)} | ` +
+            `${"Component Type".padEnd(componentTypeWidth)} |`;
+        output.appendLine(headerLine);
+        
+        // Table divider
+        const dividerLine = 
+            `| ${"-".repeat(terraformTypeWidth)} | ` +
+            `${"-".repeat(componentTypeWidth)} |`;
+        output.appendLine(dividerLine);
+        
+        // Table content
+        for (const mapping of sortedMappings) {
+            const line = 
+                `| ${mapping.terraformType.padEnd(terraformTypeWidth)} | ` +
+                `${mapping.componentType.padEnd(componentTypeWidth)} |`;
+            output.appendLine(line);
+        }
+        
+        // End of table
+        output.appendLine(dividerLine);
+    } catch (error) {
+        console.error('Error displaying resource mappings:', error);
+        output.appendLine('Error displaying resource mappings');
     }
 }
