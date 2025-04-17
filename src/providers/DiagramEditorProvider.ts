@@ -1,4 +1,3 @@
-// src/providers/DiagramEditorProvider.ts (updated with YAML support)
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -7,137 +6,120 @@ import { AwsComponentRegistry } from '../models/aws/ComponentRegistry';
 import * as yaml from 'js-yaml';
 import { SourceFileInfo } from '../models/aws/DiagramModel';
 
-export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
-  private static readonly viewType = 'extension-test.diagramEditor';
-
+export class DiagramEditorProvider {
   constructor(private readonly context: vscode.ExtensionContext) {
     // Initialize the AWS component registry
     AwsComponentRegistry.initialize();
   }
 
   /**
-   * Register the custom editor provider
+   * Open a diagram in a webview panel
    */
-  public static register(context: vscode.ExtensionContext): vscode.Disposable {
+  public static openDiagramPanel(context: vscode.ExtensionContext, initialData?: any): vscode.WebviewPanel {
+    // Create panel
+    const panel = vscode.window.createWebviewPanel(
+      'extension-test.diagramEditor', // Identifier
+      'AWS Diagram Editor',           // Title
+      vscode.ViewColumn.One,          // Column to show the panel in
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [
+          vscode.Uri.joinPath(context.extensionUri, 'out'),
+          vscode.Uri.joinPath(context.extensionUri, 'media'),
+          vscode.Uri.joinPath(context.extensionUri, 'editor-ui/build')
+        ]
+      }
+    );
+
+    // Set webview content
     const provider = new DiagramEditorProvider(context);
-    
-    // Register the provider
-    const registrations = [
-      vscode.window.registerCustomEditorProvider(
-        DiagramEditorProvider.viewType,
-        provider,
-        {
-          webviewOptions: {
-            retainContextWhenHidden: true,
-          },
-          supportsMultipleEditorsPerDocument: false,
-        }
-      ),
-      
-      // Register the command to create a new diagram
-      vscode.commands.registerCommand('extension-test.createDiagram', async () => {
-        try {
-          // Create a new untitled file with .diagram extension
-          const untitledUri = vscode.Uri.parse('untitled:new-diagram.diagram');
+    provider._getEditorContent(panel.webview)
+      .then(html => {
+        panel.webview.html = html;
+        
+        // If no initial data, create a new diagram
+        if (!initialData) {
+          const diagramName = 'New Diagram';
+          const diagram = new DiagramModel(diagramName);
           
-          // Create and open the document
-          const document = await vscode.workspace.openTextDocument(untitledUri);
-          
-          // Open with our custom editor
-          await vscode.commands.executeCommand(
-            'vscode.openWith',
-            document.uri,
-            DiagramEditorProvider.viewType
-          );
-        } catch (error) {
-          console.error('Error creating diagram:', error);
-          vscode.window.showErrorMessage(`Error creating diagram: ${error}`);
-        }
-      }),
-    ];
-
-    return vscode.Disposable.from(...registrations);
-  }
-
-  /**
-   * Resolve the custom editor for a given text document
-   */
-  async resolveCustomTextEditor(
-    document: vscode.TextDocument,
-    webviewPanel: vscode.WebviewPanel,
-    _token: vscode.CancellationToken
-  ): Promise<void> {
-    // Set up the webview
-    webviewPanel.webview.options = {
-      enableScripts: true,
-      localResourceRoots: [
-        vscode.Uri.joinPath(this.context.extensionUri, 'out'),
-        vscode.Uri.joinPath(this.context.extensionUri, 'media'),
-        vscode.Uri.joinPath(this.context.extensionUri, 'editor-ui/build')
-      ]
-    };
-
-          // Initialize the document if it's empty
-    if (document.getText() === '') {
-      // Create an empty diagram model
-      const diagramName = path.basename(document.uri.fsPath, '.diagram');
-      const diagram = new DiagramModel(diagramName || 'New Diagram');
-      
-      // Check if there's source file information available
-      const sourceFilesInfo = this.context.workspaceState.get('diagramSourceFiles') as SourceFileInfo | undefined;
-      if (sourceFilesInfo && sourceFilesInfo.rootFolder && sourceFilesInfo.files) {
-        console.log("Setting source files:", sourceFilesInfo);
-        diagram.setSourceFiles(sourceFilesInfo.rootFolder, sourceFilesInfo.files);
-        // Clear the stored info after using it
-        this.context.workspaceState.update('diagramSourceFiles', undefined);
-      }
-      
-      const edit = new vscode.WorkspaceEdit();
-      edit.insert(
-        document.uri, 
-        new vscode.Position(0, 0), 
-        JSON.stringify(diagram.toJSON(), null, 2)
-      );
-      
-      // Apply the edit
-      await vscode.workspace.applyEdit(edit);
-    }
-
-    // Set the webview content
-    webviewPanel.webview.html = await this._getEditorContent(webviewPanel.webview);
-
-    // Handle text document changes
-    const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
-      if (e.document.uri.toString() === document.uri.toString()) {
-        // Pass the updated content to the webview
-        webviewPanel.webview.postMessage({
-          type: 'update',
-          content: document.getText()
-        });
-      }
-    });
-
-    // Clean up on panel close
-    webviewPanel.onDidDispose(() => {
-      changeDocumentSubscription.dispose();
-    });
-
-    // Initial update of the webview with the document contents
-    webviewPanel.webview.postMessage({
-      type: 'update',
-      content: document.getText()
-    });
-
-    // Handle messages from the webview
-    webviewPanel.webview.onDidReceiveMessage(
-      async message => {
-        switch (message.type) {
-          case 'requestDiagram':
-            // Send the current diagram data to the webview
-            webviewPanel.webview.postMessage({
+          panel.webview.postMessage({
+            type: 'update',
+            content: JSON.stringify(diagram.toJSON(), null, 2)
+          });
+        } else if (initialData.source && typeof initialData.source === 'string') {
+          // If we have a source file path, create a diagram from it
+          try {
+            const diagramName = path.basename(initialData.source, '.tf');
+            const diagram = new DiagramModel(diagramName);
+            
+            // Add source file metadata
+            diagram.terraformSource = initialData.source;
+            
+            panel.webview.postMessage({
               type: 'update',
-              content: document.getText()
+              content: JSON.stringify(diagram.toJSON(), null, 2)
             });
+          } catch (error) {
+            console.error('Error creating diagram from source:', error);
+            
+            // Fallback to empty diagram
+            const diagram = new DiagramModel('New Diagram');
+            panel.webview.postMessage({
+              type: 'update',
+              content: JSON.stringify(diagram.toJSON(), null, 2)
+            });
+          }
+        } else {
+          // Handle other data formats safely
+          try {
+            const content = typeof initialData === 'string' 
+              ? initialData 
+              : JSON.stringify(initialData, null, 2);
+              
+            panel.webview.postMessage({
+              type: 'update',
+              content: content
+            });
+          } catch (error) {
+            console.error('Error processing initial data:', error);
+            
+            // Fallback to empty diagram
+            const diagram = new DiagramModel('New Diagram');
+            panel.webview.postMessage({
+              type: 'update',
+              content: JSON.stringify(diagram.toJSON(), null, 2)
+            });
+          }
+        }
+      })
+      .catch(error => {
+        console.error('Error setting up diagram panel:', error);
+        panel.webview.html = `<html><body><h2>Error</h2><p>${error.message}</p></body></html>`;
+      });
+
+    // Update panel title when diagram name changes
+    panel.webview.onDidReceiveMessage(
+      message => {
+        switch (message.type) {
+          case 'update':
+            // Process diagram updates
+            try {
+              if (message.content) {
+                const diagramData = JSON.parse(message.content);
+                // Update panel title if diagram name is available
+                if (diagramData.name) {
+                  panel.title = `${diagramData.name} - AWS Diagram`;
+                }
+              }
+            } catch (error) {
+              console.error('Error processing diagram update:', error);
+            }
+            return;
+            
+          case 'requestDiagram':
+            // In case the webview requests current data (e.g., after reload)
+            // But here we don't need to do anything since the initial data is already sent
             return;
             
           case 'exportYaml':
@@ -147,6 +129,22 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
         }
       }
     );
+
+    return panel;
+  }
+
+  /**
+   * Register the diagram editor related commands
+   */
+  public static register(context: vscode.ExtensionContext): vscode.Disposable {
+    const registrations = [
+      // Register the command to create a new diagram
+      vscode.commands.registerCommand('extension-test.createDiagram', () => {
+        this.openDiagramPanel(context);
+      })
+    ];
+
+    return vscode.Disposable.from(...registrations);
   }
 
   /**
@@ -197,7 +195,7 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
   /**
    * Get the HTML content for the editor
    */
-  private async _getEditorContent(webview: vscode.Webview): Promise<string> {
+  async _getEditorContent(webview: vscode.Webview): Promise<string> {
     // Path to the editor UI build
     const editorDistPath = vscode.Uri.joinPath(this.context.extensionUri, 'editor-ui/build');
     

@@ -27,8 +27,12 @@
         "icon": "$(add)"
       },
       {
-        "command": "extension-test.exportDiagramToYaml",
-        "title": "Export Diagram to YAML"
+        "command": "extension-test.editResourceMappingConfig",
+        "title": "Edit Resource Mapping Configuration"
+      },
+      {
+        "command": "extension-test.runTerraformDiagnostics",
+        "title": "Run Terraform Resource Diagnostics"
       }
     ],
     "viewsContainers": {
@@ -55,6 +59,28 @@
           "command": "extension-test.createDiagramFromSelected",
           "when": "view == extension-test.terraformFiles",
           "group": "navigation"
+        },
+        {
+          "command": "extension-test.runTerraformDiagnostics",
+          "when": "view == extension-test.terraformFiles",
+          "group": "navigation"
+        },
+        {
+          "command": "extension-test.editResourceMappingConfig",
+          "when": "view == extension-test.terraformFiles",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "extension-test.createDiagramFromSelected",
+          "when": "view == extension-test.terraformFiles && viewItem == terraform-file",
+          "group": "inline"
+        },
+        {
+          "command": "extension-test.runTerraformDiagnostics",
+          "when": "view == extension-test.terraformFiles && viewItem == terraform-file",
+          "group": "inline"
         }
       ]
     },

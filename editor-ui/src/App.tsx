@@ -46,7 +46,7 @@ function App() {
             const diagramData = JSON.parse(message.content);
             setDiagram(diagramData);
             
-            // Save to state
+            // Save to webview state (this is not saving to filesystem)
             vscode.setState({ diagram: diagramData });
             
             // Store source files information globally if available
@@ -82,9 +82,13 @@ function App() {
     };
   }, []);
 
-  // Handle YAML export
-  const handleExportYaml = (yamlContent: string, diagramName: string) => {
-    // Send YAML content to the extension
+  // Handle diagram update - no file saving, just state updates
+  const handleUpdateDiagram = (updatedDiagram: DiagramData) => {
+    // Save to webview state only (not filesystem)
+    vscode.setState({ diagram: updatedDiagram });
+    setDiagram(updatedDiagram);
+    
+    // Send the updated diagram back to the extension for UI updates only
     vscode.postMessage({
       type: 'exportYaml',
       content: yamlContent,
@@ -180,7 +184,7 @@ function App() {
     <div className="app-container" style={{ height: '100vh', overflow: 'hidden' }}>
       <DiagramEditor
         initialDiagram={diagram}
-        onExportYaml={handleExportYaml}
+        onUpdate={handleUpdateDiagram}
       />
     </div>
   );
