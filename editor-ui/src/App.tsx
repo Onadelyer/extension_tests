@@ -49,6 +49,11 @@ function App() {
             // Save to webview state (this is not saving to filesystem)
             vscode.setState({ diagram: diagramData });
             
+            // Store source files information globally if available
+            if (diagramData.sourceFiles) {
+              window.diagramSourceFiles = diagramData.sourceFiles;
+            }
+            
             // Clear any errors
             setError(null);
             setLoading(false);
@@ -85,8 +90,9 @@ function App() {
     
     // Send the updated diagram back to the extension for UI updates only
     vscode.postMessage({
-      type: 'update',
-      content: JSON.stringify(updatedDiagram, null, 2)
+      type: 'exportYaml',
+      content: yamlContent,
+      name: diagramName
     });
   };
 

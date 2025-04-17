@@ -3,6 +3,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { DiagramModel } from '../models/aws/DiagramModel';
 import { AwsComponentRegistry } from '../models/aws/ComponentRegistry';
+import * as yaml from 'js-yaml';
+import { SourceFileInfo } from '../models/aws/DiagramModel';
 
 export class DiagramEditorProvider {
   constructor(private readonly context: vscode.ExtensionContext) {
@@ -119,6 +121,11 @@ export class DiagramEditorProvider {
             // In case the webview requests current data (e.g., after reload)
             // But here we don't need to do anything since the initial data is already sent
             return;
+            
+          case 'exportYaml':
+            // Handle YAML export
+            await this._handleYamlExport(message.content, message.name);
+            return;
         }
       }
     );
@@ -138,6 +145,51 @@ export class DiagramEditorProvider {
     ];
 
     return vscode.Disposable.from(...registrations);
+  }
+
+  /**
+   * Handle exporting the diagram to YAML
+   */
+  private async _handleYamlExport(yamlContent: string, diagramName: string): Promise<void> {
+    try {
+      // Get workspace root folder to use as default save location
+      let defaultUri: vscode.Uri | undefined;
+      
+      if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+        // Use the first workspace folder as the project root
+        const rootFolder = vscode.workspace.workspaceFolders[0];
+        defaultUri = vscode.Uri.joinPath(rootFolder.uri, `${diagramName}.yaml`);
+      } else {
+        // Fallback to a simple filename if no workspace is open
+        defaultUri = vscode.Uri.file(`${diagramName}.yaml`);
+      }
+      
+      // Let the user choose where to save the file, starting from the project root
+      const saveUri = await vscode.window.showSaveDialog({
+        defaultUri,
+        filters: {
+          'YAML files': ['yaml', 'yml'],
+          'All files': ['*']
+        },
+        saveLabel: 'Export as YAML',
+        title: 'Export Diagram as YAML'
+      });
+      
+      if (saveUri) {
+        // Write the file
+        fs.writeFileSync(saveUri.fsPath, yamlContent);
+        
+        // Show success message
+        vscode.window.showInformationMessage(`Diagram exported successfully to ${saveUri.fsPath}`);
+        
+        // Open the file
+        const document = await vscode.workspace.openTextDocument(saveUri);
+        await vscode.window.showTextDocument(document);
+      }
+    } catch (error) {
+      console.error('Error exporting diagram to YAML:', error);
+      vscode.window.showErrorMessage(`Error exporting diagram to YAML: ${error}`);
+    }
   }
 
   /**
