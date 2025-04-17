@@ -3,6 +3,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { DiagramModel } from '../models/aws/DiagramModel';
 import { AwsComponentRegistry } from '../models/aws/ComponentRegistry';
+import * as yaml from 'js-yaml';
+import { SourceFileInfo } from '../models/aws/DiagramModel';
 
 export class DiagramEditorProvider {
   constructor(private readonly context: vscode.ExtensionContext) {
