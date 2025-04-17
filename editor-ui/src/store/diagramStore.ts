@@ -32,6 +32,9 @@ interface DiagramState {
   // ReactFlow instance
   setReactFlowInstance: (instance: ReactFlowInstance) => void;
   
+  // Nodes and edges actions
+  setNodes: (nodes: Node[], edges?: Edge[]) => void;
+  
   // Conversion utilities
   convertToReactFlowData: () => void;
   convertToVSCodeData: () => DiagramData;
@@ -89,6 +92,15 @@ const useDiagramStore = create<DiagramState>((set, get) => ({
   setDiagram: (diagram) => {
     set({ diagram });
     get().convertToReactFlowData();
+  },
+  
+  // Update nodes and edges directly
+  setNodes: (nodes, edges) => {
+    if (edges) {
+      set({ nodes, edges });
+    } else {
+      set({ nodes });
+    }
   },
   
   // Update a node
