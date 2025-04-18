@@ -68,10 +68,17 @@ const DiagramCanvas: React.FC = () => {
             }
             break;
           case 'select':
+            // Force selection to update the store
             if (change.selected) {
-              selectNode(change.id);
-            } else {
-              deselectAll();
+              // Slight delay to ensure selection works even with click events
+              setTimeout(() => {
+                selectNode(change.id);
+              }, 0);
+            } else if (!changes.some(c => c.type === 'select' && c.selected)) {
+              // Only deselect if there are no other nodes being selected
+              setTimeout(() => {
+                deselectAll();
+              }, 0);
             }
             break;
           case 'remove':
@@ -166,7 +173,9 @@ const DiagramCanvas: React.FC = () => {
         edgeTypes={edgeTypes}
         draggable={true}
         nodesDraggable={true}
-        selectNodesOnDrag={true}
+        elementsSelectable={true}
+        selectNodesOnDrag={false}
+        onClick={() => deselectAll()} // Deselect when clicking on empty canvas
         fitView
         snapToGrid
         snapGrid={[20, 20]}

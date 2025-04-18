@@ -1,6 +1,7 @@
-import React, { memo } from 'react';
+import React, { memo, useCallback } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { SubnetIcon } from '../../../assets/aws-icons';
+import useDiagramStore from '../../../store/diagramStore';
 
 // Style for all AWS nodes
 const nodeStyle = {
@@ -9,22 +10,34 @@ const nodeStyle = {
   width: '120px',
   height: '80px',
   fontSize: '12px',
-  background: 'white',
+  background: 'rgba(240, 250, 255, 0.9)',
   border: '1px solid #ddd',
   display: 'flex',
   flexDirection: 'column' as const,
   alignItems: 'center',
   justifyContent: 'center',
-  boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+  boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+  cursor: 'pointer',
+  zIndex: 1,
+  position: 'relative' as const
 };
 
 const selectedStyle = {
   ...nodeStyle,
   borderColor: '#0078d4',
-  boxShadow: '0 0 0 2px #0078d4'
+  boxShadow: '0 0 0 2px #0078d4',
+  zIndex: 2
 };
 
 const SubnetNode: React.FC<NodeProps> = ({ id, data, selected }) => {
+  const { selectNode } = useDiagramStore();
+  
+  // Force selection when node is clicked directly
+  const handleNodeClick = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+    selectNode(id);
+  }, [id, selectNode]);
+
   // Different background color for public vs private subnets
   const isPublic = data.isPublic || false;
   const backgroundColor = isPublic ? 'rgba(173, 216, 230, 0.2)' : 'rgba(255, 255, 255, 1)';
@@ -35,7 +48,10 @@ const SubnetNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   };
 
   return (
-    <div style={currentStyle}>
+    <div 
+      style={currentStyle}
+      onClick={handleNodeClick}
+    >
       <Handle type="target" position={Position.Top} style={{ background: '#555' }} />
       
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

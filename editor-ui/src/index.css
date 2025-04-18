@@ -26,16 +26,27 @@ body {
   
   /* ReactFlow customizations */
   .react-flow__node {
-    cursor: pointer;
-    transition: box-shadow 0.2s ease;
+    cursor: pointer !important;
+    transition: box-shadow 0.2s ease, transform 0.1s ease;
+    transform-origin: center;
+    user-select: none;
   }
   
   .react-flow__node.selected {
     box-shadow: 0 0 0 2px var(--vscode-focusBorder) !important;
+    z-index: 10 !important;
+    transform: scale(1.02);
   }
   
   .react-flow__node:hover {
-    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 0 8px rgba(0, 120, 212, 0.4) !important;
+    z-index: 5;
+  }
+  
+  .react-flow__node-default.selected,
+  .react-flow__node-input.selected,
+  .react-flow__node-output.selected {
+    box-shadow: 0 0 0 2px var(--vscode-focusBorder) !important;
   }
   
   .react-flow__handle {
@@ -43,10 +54,13 @@ body {
     height: 8px;
     background-color: var(--vscode-editor-foreground);
     border: 1px solid var(--vscode-panel-border);
+    z-index: 12;
+    pointer-events: all !important;
   }
   
   .react-flow__handle:hover {
     background-color: var(--vscode-focusBorder);
+    transform: scale(1.2);
   }
   
   .react-flow__edge-path {
