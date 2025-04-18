@@ -64,7 +64,7 @@ export class TerraformResourceParser {
     const resources: TerraformResource[] = [];
     const resourceTypes = config.resourceMappings.map(m => m.terraformType);
     
-    console.log(`Parsing ${filePaths.length} files for resource types:`, resourceTypes);
+    (`Parsing ${filePaths.length} files for resource types:`, resourceTypes);
     
     for (const filePath of filePaths) {
       try {
@@ -73,7 +73,7 @@ export class TerraformResourceParser {
         
         try {
           // Try parsing with HCL parser first
-          console.log(`Parsing file with HCL parser: ${filePath}`);
+          (`Parsing file with HCL parser: ${filePath}`);
           const parsedContent = parse(content);
           
           // Extract resources
@@ -85,7 +85,7 @@ export class TerraformResourceParser {
             continue;
           }
           
-          console.log(`HCL parser found no resources in ${filePath}, trying regex fallback`);
+          (`HCL parser found no resources in ${filePath}, trying regex fallback`);
         } catch (hclError) {
           console.warn(`HCL parser error for ${filePath}, trying regex fallback:`, hclError);
         }
@@ -100,11 +100,11 @@ export class TerraformResourceParser {
       }
     }
     
-    console.log(`Total resources found before filtering: ${resources.length}`);
+    (`Total resources found before filtering: ${resources.length}`);
     
     // Apply configuration filters
     const filteredResources = this.filterResources(resources, config);
-    console.log(`Filtered resources count: ${filteredResources.length}`);
+    (`Filtered resources count: ${filteredResources.length}`);
     
     return filteredResources;
   }
@@ -122,18 +122,18 @@ export class TerraformResourceParser {
     resourceTypes: string[]
   ): TerraformResource[] {
     const resources: TerraformResource[] = [];
-    console.log(`Parsing HCL from ${filePath}, looking for resource types:`, resourceTypes);
+    (`Parsing HCL from ${filePath}, looking for resource types:`, resourceTypes);
     
     // Handle managed resources (newer parser format)
     if (parsedHCL.managed_resources) {
-      console.log(`Found managed_resources in ${filePath}:`, Object.keys(parsedHCL.managed_resources));
+      (`Found managed_resources in ${filePath}:`, Object.keys(parsedHCL.managed_resources));
       
       for (const [resourceType, resourcesOfType] of Object.entries(parsedHCL.managed_resources)) {
-        console.log(`Resource type: ${resourceType}, Included: ${resourceTypes.includes(resourceType)}`);
+        (`Resource type: ${resourceType}, Included: ${resourceTypes.includes(resourceType)}`);
         
         // Skip if not in our resource types list
         if (!resourceTypes.includes(resourceType)) {
-          console.log(`Skipping resource type ${resourceType} - not in config`);
+          (`Skipping resource type ${resourceType} - not in config`);
           continue;
         }
         
@@ -141,7 +141,7 @@ export class TerraformResourceParser {
         if (resourcesOfType && typeof resourcesOfType === 'object') {
           for (const [resourceName, resourceData] of Object.entries(resourcesOfType)) {
             if (resourceData && typeof resourceData === 'object') {
-              console.log(`Creating resource: ${resourceType}.${resourceName}`);
+              (`Creating resource: ${resourceType}.${resourceName}`);
               
               const resource: TerraformResource = {
                 type: resourceType,
@@ -161,16 +161,16 @@ export class TerraformResourceParser {
     
     // Handle "resource" block format (common in Terraform files)
     if (parsedHCL.resource) {
-      console.log(`Found 'resource' block in ${filePath}`);
+      (`Found 'resource' block in ${filePath}`);
       const resourceBlocks = parsedHCL.resource;
       
       if (resourceBlocks && typeof resourceBlocks === 'object') {
         for (const [resourceType, instances] of Object.entries(resourceBlocks)) {
-          console.log(`Resource type in resource block: ${resourceType}, Included: ${resourceTypes.includes(resourceType)}`);
+          (`Resource type in resource block: ${resourceType}, Included: ${resourceTypes.includes(resourceType)}`);
           
           // Skip if not in our resource types list
           if (!resourceTypes.includes(resourceType)) {
-            console.log(`Skipping resource type ${resourceType} in resource block - not in config`);
+            (`Skipping resource type ${resourceType} in resource block - not in config`);
             continue;
           }
           
@@ -179,7 +179,7 @@ export class TerraformResourceParser {
             instances.forEach((instance, index) => {
               for (const [resourceName, resourceData] of Object.entries(instance)) {
                 if (resourceData && typeof resourceData === 'object') {
-                  console.log(`Creating resource from array: ${resourceType}.${resourceName}`);
+                  (`Creating resource from array: ${resourceType}.${resourceName}`);
                   
                   const resource: TerraformResource = {
                     type: resourceType,
@@ -197,7 +197,7 @@ export class TerraformResourceParser {
           } else if (typeof instances === 'object') {
             for (const [resourceName, resourceData] of Object.entries(instances)) {
               if (resourceData && typeof resourceData === 'object') {
-                console.log(`Creating resource from object: ${resourceType}.${resourceName}`);
+                (`Creating resource from object: ${resourceType}.${resourceName}`);
                 
                 const resource: TerraformResource = {
                   type: resourceType,
@@ -223,11 +223,11 @@ export class TerraformResourceParser {
           resourceTypes.includes(key) && 
           value && typeof value === 'object') {
             
-        console.log(`Found direct resource type at root level: ${key}`);
+        (`Found direct resource type at root level: ${key}`);
         
         for (const [resourceName, resourceData] of Object.entries(value)) {
           if (resourceData && typeof resourceData === 'object') {
-            console.log(`Creating resource from root level: ${key}.${resourceName}`);
+            (`Creating resource from root level: ${key}.${resourceName}`);
             
             const resource: TerraformResource = {
               type: key,
@@ -244,7 +244,7 @@ export class TerraformResourceParser {
       }
     }
     
-    console.log(`Extracted ${resources.length} resources from ${filePath}`);
+    (`Extracted ${resources.length} resources from ${filePath}`);
     return resources;
   }
   
@@ -267,7 +267,7 @@ export class TerraformResourceParser {
     const resourceRegex = /resource\s+"([^"]+)"\s+"([^"]+)"\s+{([^}]*)}/gs;
     let match;
     
-    console.log(`Applying regex parser to ${filePath}`);
+    (`Applying regex parser to ${filePath}`);
     
     while ((match = resourceRegex.exec(content)) !== null) {
       const resourceType = match[1];
@@ -276,11 +276,11 @@ export class TerraformResourceParser {
       
       // Check if this resource type is in our config
       if (!resourceTypes.includes(resourceType)) {
-        console.log(`Regex parser: Skipping resource type ${resourceType} - not in config`);
+        (`Regex parser: Skipping resource type ${resourceType} - not in config`);
         continue;
       }
       
-      console.log(`Regex parser: Found resource ${resourceType}.${resourceName}`);
+      (`Regex parser: Found resource ${resourceType}.${resourceName}`);
       
       // Extract attributes using regex
       const attributes = this.extractAttributesWithRegex(resourceBody);
@@ -298,7 +298,7 @@ export class TerraformResourceParser {
       resources.push(resource);
     }
     
-    console.log(`Regex parser extracted ${resources.length} resources from ${filePath}`);
+    (`Regex parser extracted ${resources.length} resources from ${filePath}`);
     return resources;
   }
   
@@ -467,7 +467,7 @@ export class TerraformResourceParser {
     resources: TerraformResource[], 
     config: ResourceMappingConfig
   ): TerraformResource[] {
-    console.log(`Filtering ${resources.length} resources based on configuration`);
+    (`Filtering ${resources.length} resources based on configuration`);
     
     // Track resources by type for diagnostics
     const resourcesByType: { [type: string]: number } = {};
@@ -477,7 +477,7 @@ export class TerraformResourceParser {
       resourcesByType[r.type] = (resourcesByType[r.type] || 0) + 1;
     });
     
-    console.log("Resources by type before filtering:", resourcesByType);
+    ("Resources by type before filtering:", resourcesByType);
     
     const filtered = resources.filter(resource => {
       // Find the matching resource mapping
@@ -485,7 +485,7 @@ export class TerraformResourceParser {
       
       if (!mapping) {
         // No mapping for this resource type
-        console.log(`Filtering out ${resource.id} - no mapping for type ${resource.type}`);
+        (`Filtering out ${resource.id} - no mapping for type ${resource.type}`);
         filteredOutByType[resource.type] = (filteredOutByType[resource.type] || 0) + 1;
         return false;
       }
@@ -494,7 +494,7 @@ export class TerraformResourceParser {
       if (mapping.includePattern) {
         const includeRegex = new RegExp(mapping.includePattern);
         if (!includeRegex.test(resource.name)) {
-          console.log(`Filtering out ${resource.id} - doesn't match include pattern ${mapping.includePattern}`);
+          (`Filtering out ${resource.id} - doesn't match include pattern ${mapping.includePattern}`);
           filteredOutByType[resource.type] = (filteredOutByType[resource.type] || 0) + 1;
           return false;
         }
@@ -504,20 +504,20 @@ export class TerraformResourceParser {
       if (mapping.excludePattern) {
         const excludeRegex = new RegExp(mapping.excludePattern);
         if (excludeRegex.test(resource.name)) {
-          console.log(`Filtering out ${resource.id} - matches exclude pattern ${mapping.excludePattern}`);
+          (`Filtering out ${resource.id} - matches exclude pattern ${mapping.excludePattern}`);
           filteredOutByType[resource.type] = (filteredOutByType[resource.type] || 0) + 1;
           return false;
         }
       }
       
       // Resource passed all filters
-      console.log(`Including resource ${resource.id} with attributes:`, resource.attributes);
+      (`Including resource ${resource.id} with attributes:`, resource.attributes);
       return true;
     });
     
     if (filtered.length === 0 && resources.length > 0) {
-      console.log("All resources were filtered out. Filtered out by type:", filteredOutByType);
-      console.log("Check your mapping configuration against these resource types:", Object.keys(resourcesByType));
+      ("All resources were filtered out. Filtered out by type:", filteredOutByType);
+      ("Check your mapping configuration against these resource types:", Object.keys(resourcesByType));
     }
     
     return filtered;

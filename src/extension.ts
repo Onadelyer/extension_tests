@@ -14,7 +14,7 @@ import {
 import { ResourceMappingConfigManager } from './config/ResourceMappingConfig';
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('Congratulations, "extension-test" is now active!');
+  ('Congratulations, "extension-test" is now active!');
 
   // Create the decoration provider for highlighting dependencies
   const decorationProvider = new TerraformDependencyDecorationProvider();
