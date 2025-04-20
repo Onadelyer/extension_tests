@@ -9,11 +9,16 @@ export abstract class ContainerComponent extends AwsComponent {
   }
   
   addChild(component: AwsComponent): void {
+    console.log(`[DEBUG] ContainerComponent.addChild - Adding child ${component.id} (${component.type}) to ${this.id} (${this.type})`);
     this.children.push(component);
+    console.log(`[DEBUG] ContainerComponent.addChild - Children count: ${this.children.length}`);
   }
   
   removeChild(componentId: string): void {
+    console.log(`[DEBUG] ContainerComponent.removeChild - Removing child ${componentId} from ${this.id} (${this.type})`);
+    const beforeCount = this.children.length;
     this.children = this.children.filter(c => c.id !== componentId);
+    console.log(`[DEBUG] ContainerComponent.removeChild - Removed: ${beforeCount - this.children.length}`);
   }
   
   getChild(componentId: string): AwsComponent | undefined {

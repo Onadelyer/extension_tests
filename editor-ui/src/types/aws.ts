@@ -58,5 +58,6 @@ export interface Position {
     DATABASE = 'Database',
     SECURITY = 'Security',
     INTEGRATION = 'Integration',
-    CONTAINER = 'Container'
+    CONTAINER = 'Container',
+    AREA = 'Area'
   }

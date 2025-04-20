@@ -15,33 +15,33 @@ export interface ComponentDefinition {
 const AWS_COMPONENTS: ComponentDefinition[] = [
   {
     type: 'RegionComponent',
-    category: AwsComponentCategory.GLOBAL,
+    category: AwsComponentCategory.AREA,
     displayName: 'AWS Region',
     description: 'Geographic area containing AWS resources'
   },
   {
     type: 'VpcComponent',
-    category: AwsComponentCategory.NETWORKING,
+    category: AwsComponentCategory.AREA,
     displayName: 'VPC',
     description: 'Virtual Private Cloud - isolated network environment'
   },
   {
     type: 'SubnetComponent',
-    category: AwsComponentCategory.NETWORKING,
+    category: AwsComponentCategory.AREA,
     displayName: 'Subnet',
     description: 'Subdivision of VPC with specific routing rules'
+  },
+  {
+    type: 'SecurityGroupComponent',
+    category: AwsComponentCategory.AREA,
+    displayName: 'Security Group',
+    description: 'Virtual firewall for resources in VPC'
   },
   {
     type: 'EC2InstanceComponent',
     category: AwsComponentCategory.COMPUTE,
     displayName: 'EC2 Instance',
     description: 'Virtual server in the AWS cloud'
-  },
-  {
-    type: 'SecurityGroupComponent',
-    category: AwsComponentCategory.SECURITY,
-    displayName: 'Security Group',
-    description: 'Virtual firewall for resources in VPC'
   },
   {
     type: 'InternetGatewayComponent',

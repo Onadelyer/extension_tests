@@ -23,10 +23,15 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({
 
   // Initialize with initial diagram data or create a default one
   useEffect(() => {
+    console.log('[DEBUG] DiagramEditor - useEffect initializing diagram');
     if (initialDiagram) {
+      console.log('[DEBUG] DiagramEditor - Received initial diagram:', initialDiagram);
+      console.log('[DEBUG] DiagramEditor - Initial diagram children count:', 
+        initialDiagram.region?.children?.length || 'N/A');
       setDiagram(initialDiagram);
       setDiagramName(initialDiagram.name || 'New Diagram');
     } else {
+      console.log('[DEBUG] DiagramEditor - Creating default diagram');
       const defaultDiagram = createDefaultDiagram();
       setDiagram(defaultDiagram);
       setDiagramName(defaultDiagram.name);
@@ -37,12 +42,16 @@ export const DiagramEditor: React.FC<DiagramEditorProps> = ({
   const handleUpdate = () => {
     if (onUpdate && diagram) {
       try {
+        console.log('[DEBUG] DiagramEditor - handleUpdate - Converting to VS Code data');
         const diagramData = convertToVSCodeData();
         // Update the name
         diagramData.name = diagramName;
+        console.log('[DEBUG] DiagramEditor - handleUpdate - Diagram after conversion:', diagramData);
+        console.log('[DEBUG] DiagramEditor - handleUpdate - Children count:', 
+          diagramData.region?.children?.length || 'N/A');
         onUpdate(diagramData);
       } catch (error) {
-        console.error('Error updating diagram:', error);
+        console.error('[DEBUG] DiagramEditor - Error updating diagram:', error);
       }
     }
   };

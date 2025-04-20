@@ -1,23 +1,20 @@
 import EC2Node from './EC2Node';
-import VPCNode from './VPCNode';
-import SubnetNode from './SubnetNode';
-// import SecurityGroupNode from './SecurityGroupNode';
-// import S3BucketNode from './S3BucketNode';
-// import RDSNode from './RDSNode';
-// import LambdaNode from './LambdaNode';
-import RegionNode from './RegionNode';
-// import InternetGatewayNode from './InternetGatewayNode';
-// import RouteTableNode from './RouteTableNode';
+import AreaNode from './AreaNode';
+import InternetGatewayNode from './InternetGatewayNode';
+import RouteTableNode from './RouteTableNode';
+
+// Log the available node types for debugging
+console.log('[DEBUG] nodes/index.ts - Registering node types for ReactFlow');
 
 export const nodeTypes = {
   EC2InstanceComponent: EC2Node,
-  VpcComponent: VPCNode,
-  SubnetComponent: SubnetNode,
-  // SecurityGroupComponent: SecurityGroupNode,
-  // S3BucketComponent: S3BucketNode,
-  // RDSInstanceComponent: RDSNode,
-  // LambdaFunctionComponent: LambdaNode,
-  RegionComponent: RegionNode,
-  // InternetGatewayComponent: InternetGatewayNode,
-  // RouteTableComponent: RouteTableNode
+  VpcComponent: AreaNode,
+  SubnetComponent: AreaNode,
+  SecurityGroupComponent: AreaNode,
+  RegionComponent: AreaNode,
+  InternetGatewayComponent: InternetGatewayNode,
+  RouteTableComponent: RouteTableNode
 };
+
+// Log the registered node types
+console.log('[DEBUG] nodes/index.ts - Registered node types:', Object.keys(nodeTypes));

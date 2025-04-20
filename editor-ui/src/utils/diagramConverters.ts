@@ -2,14 +2,21 @@ import { Node, Edge } from 'reactflow';
 import { DiagramData, AwsComponentData, RelationshipData, RelationshipType } from '../types/aws';
 import { v4 as uuidv4 } from 'uuid';
 
+// List of area component types
+const areaComponentTypes = ['RegionComponent', 'VpcComponent', 'SubnetComponent', 'SecurityGroupComponent'];
+
 /**
  * Convert from VSCode diagram format to ReactFlow format
  */
 export const diagramToReactFlow = (diagram: DiagramData): { nodes: Node[], edges: Edge[] } => {
+  console.log('[DEBUG] diagramToReactFlow - Starting conversion');
+  console.log('[DEBUG] diagramToReactFlow - Input diagram:', diagram);
+  
   const nodes: Node[] = [];
   const edges: Edge[] = [];
   
   // Add region as a node
+  console.log('[DEBUG] diagramToReactFlow - Adding region node:', diagram.region);
   nodes.push({
     id: diagram.region.id,
     type: diagram.region.type,
@@ -24,8 +31,19 @@ export const diagramToReactFlow = (diagram: DiagramData): { nodes: Node[], edges
     },
     draggable: true  // Add this explicitly
   });
+
   // Add child components as nodes
-  diagram.region.children.forEach(component => {
+  console.log('[DEBUG] diagramToReactFlow - Processing', diagram.region.children.length, 'children');
+  diagram.region.children.forEach((component, index) => {
+    console.log(`[DEBUG] diagramToReactFlow - Processing child ${index}:`, component);
+    
+    // Ensure area components have appropriate size
+    if (areaComponentTypes.includes(component.type) && (!component.size || component.size.width < 200)) {
+      component.size = component.type === 'RegionComponent' 
+        ? { width: 800, height: 600 } 
+        : { width: 300, height: 200 };
+    }
+
     const node = {
       id: component.id,
       type: component.type,
@@ -41,10 +59,12 @@ export const diagramToReactFlow = (diagram: DiagramData): { nodes: Node[], edges
       draggable: true  // Add this explicitly
     };
     
+    console.log(`[DEBUG] diagramToReactFlow - Created node for ${component.type}:`, node);
     nodes.push(node);
   });
   
   // Add relationships as edges
+  console.log('[DEBUG] diagramToReactFlow - Processing', diagram.relationships.length, 'relationships');
   diagram.relationships.forEach(relationship => {
     edges.push({
       id: relationship.id,
@@ -58,6 +78,8 @@ export const diagramToReactFlow = (diagram: DiagramData): { nodes: Node[], edges
     });
   });
   
+  console.log('[DEBUG] diagramToReactFlow - Final nodes count:', nodes.length);
+  console.log('[DEBUG] diagramToReactFlow - Final edges count:', edges.length);
   return { nodes, edges };
 };
 
@@ -162,7 +184,7 @@ export const reactFlowToDiagram = (
 export const createDefaultDiagram = (name: string = 'New Diagram'): DiagramData => {
   const regionId = uuidv4();
   
-  return {
+  const diagram = {
     id: uuidv4(),
     name,
     region: {
@@ -178,4 +200,7 @@ export const createDefaultDiagram = (name: string = 'New Diagram'): DiagramData 
     },
     relationships: []
   };
+  
+  console.log('diagramConverters: Created default diagram with ID:', diagram.id);
+  return diagram;
 };

@@ -3,6 +3,9 @@ import { RegionComponent } from "./components/RegionComponent";
 import { VpcComponent } from "./components/VpcComponent";
 import { EC2InstanceComponent } from "./components/EC2InstanceComponent";
 import { SubnetComponent } from "./components/SubnetComponent";
+import { SecurityGroupComponent } from "./components/SecurityGroupComponent";
+import { InternetGatewayComponent } from "./components/InternetGatewayComponent";
+import { RouteTableComponent } from "./components/RouteTableComponent";
 
 // Interface for component class with static method
 interface AwsComponentClass {
@@ -10,42 +13,48 @@ interface AwsComponentClass {
   fromJSON(json: any): AwsComponent;
 }
 
+// Registry for AWS component classes
 export class AwsComponentRegistry {
-  private static componentTypes: Map<string, AwsComponentClass> = new Map();
-  
+  private static registry: Map<string, AwsComponentClass> = new Map();
+
+  // Initialize the registry with component types
   static initialize(): void {
-    // Register all component types
+    // Register base components
     this.register('RegionComponent', RegionComponent);
     this.register('VpcComponent', VpcComponent);
-    this.register('EC2InstanceComponent', EC2InstanceComponent);
     this.register('SubnetComponent', SubnetComponent);
+    this.register('EC2InstanceComponent', EC2InstanceComponent);
+    this.register('SecurityGroupComponent', SecurityGroupComponent);
+    this.register('InternetGatewayComponent', InternetGatewayComponent);
+    this.register('RouteTableComponent', RouteTableComponent);
   }
-  
-  static register(typeName: string, componentClass: AwsComponentClass): void {
-    this.componentTypes.set(typeName, componentClass);
+
+  // Register a component class
+  static register(type: string, componentClass: AwsComponentClass): void {
+    this.registry.set(type, componentClass);
   }
-  
-  static getComponentClass(typeName: string): AwsComponentClass | undefined {
-    return this.componentTypes.get(typeName);
+
+  // Get a component class by type
+  static getComponentClass(type: string): AwsComponentClass | undefined {
+    return this.registry.get(type);
   }
-  
-  static createComponentFromJSON(json: any): AwsComponent | null {
-    const componentClass = this.getComponentClass(json.type);
-    if (!componentClass) {
-      console.error(`Unknown component type: ${json.type}`);
+
+  // Get all registered component types
+  static getAllComponentTypes(): string[] {
+    return Array.from(this.registry.keys());
+  }
+
+  // Create a component instance from JSON
+  static createFromJSON(json: any): AwsComponent | null {
+    if (!json || !json.type) {
       return null;
     }
-    
-    // Use the static fromJSON method if available
-    if (typeof componentClass.fromJSON === 'function') {
-      return componentClass.fromJSON(json);
+
+    const componentClass = this.getComponentClass(json.type);
+    if (!componentClass) {
+      return null;
     }
-    
-    // Fallback to constructor with JSON properties
-    return new componentClass(json);
-  }
-  
-  static getAllComponentTypes(): string[] {
-    return Array.from(this.componentTypes.keys());
+
+    return componentClass.fromJSON(json);
   }
 }

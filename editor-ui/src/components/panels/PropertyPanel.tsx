@@ -4,7 +4,7 @@ import useDiagramStore from '../../store/diagramStore';
 interface PropertyField {
   key: string;
   label: string;
-  type: 'text' | 'select' | 'number' | 'boolean' | 'cidr' | 'array';
+  type: 'text' | 'select' | 'number' | 'boolean' | 'cidr' | 'array' | 'readonly';
   options?: string[];
   placeholder?: string;
   validation?: RegExp;
@@ -15,6 +15,22 @@ interface PropertyGroup {
   title: string;
   fields: PropertyField[];
 }
+
+// List of area component types
+const areaComponentTypes = ['RegionComponent', 'VpcComponent', 'SubnetComponent', 'SecurityGroupComponent'];
+
+// Map of component types to allowed child types
+const allowedChildTypeMap: Record<string, string[]> = {
+  'RegionComponent': ['VpcComponent', 'S3BucketComponent', 'RDSInstanceComponent', 'LambdaFunctionComponent'],
+  'VpcComponent': ['SubnetComponent', 'SecurityGroupComponent', 'RouteTableComponent'],
+  'SubnetComponent': ['EC2InstanceComponent', 'RDSInstanceComponent', 'LambdaFunctionComponent'],
+  'SecurityGroupComponent': ['EC2InstanceComponent', 'RDSInstanceComponent', 'LambdaFunctionComponent']
+};
+
+// Helper function to get a human-readable name from component type
+const getComponentTypeName = (type: string): string => {
+  return type.replace('Component', '');
+};
 
 const PropertyPanel: React.FC = () => {
   const { selectedNodes, nodes, updateNode } = useDiagramStore();
@@ -62,6 +78,28 @@ const PropertyPanel: React.FC = () => {
       ]
     };
 
+    // Check if this is an area component
+    const isAreaComponent = selectedNode.type ? areaComponentTypes.includes(selectedNode.type) : false;
+    
+    // Include a contained resources group for area components
+    const containedResourcesGroup: PropertyGroup = {
+      title: 'Contained Resources',
+      fields: [
+        { 
+          key: 'allowedChildTypes', 
+          label: 'Resource Types That Can Be Contained', 
+          type: 'readonly',
+          helpText: 'These resource types can be placed in this area'
+        },
+        {
+          key: 'containedResources',
+          label: 'Resources Currently Contained',
+          type: 'readonly',
+          helpText: 'Drag resources here to include them (placeholder)'
+        }
+      ]
+    };
+
     // Component-specific properties
     switch (selectedNode.type) {
       case 'RegionComponent':
@@ -87,7 +125,8 @@ const PropertyPanel: React.FC = () => {
                 helpText: 'Comma-separated list of AZs'
               }
             ]
-          }
+          },
+          containedResourcesGroup
         ];
 
       case 'VpcComponent':
@@ -115,7 +154,8 @@ const PropertyPanel: React.FC = () => {
                 type: 'boolean'
               }
             ]
-          }
+          },
+          containedResourcesGroup
         ];
 
       case 'SubnetComponent':
@@ -143,7 +183,25 @@ const PropertyPanel: React.FC = () => {
                 type: 'boolean'
               }
             ]
-          }
+          },
+          containedResourcesGroup
+        ];
+        
+      case 'SecurityGroupComponent':
+        return [
+          basicGroup,
+          {
+            title: 'Security Group Settings',
+            fields: [
+              {
+                key: 'description',
+                label: 'Description',
+                type: 'text',
+                placeholder: 'Security group description'
+              }
+            ]
+          },
+          containedResourcesGroup
         ];
 
       case 'EC2InstanceComponent':
@@ -209,6 +267,104 @@ const PropertyPanel: React.FC = () => {
   const renderField = (field: PropertyField) => {
     const value = selectedNode.data[field.key];
     const error = validationErrors[field.key];
+
+    // Special case for contained resources field
+    if (field.key === 'allowedChildTypes') {
+      const nodeType = selectedNode.type || '';
+      const allowedTypes = allowedChildTypeMap[nodeType] || [];
+      
+      return (
+        <div className="form-group" key={field.key} style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', marginBottom: '5px' }}>{field.label}:</label>
+          <div
+            style={{
+              padding: '8px',
+              border: '1px solid var(--vscode-input-border)',
+              borderRadius: '4px',
+              backgroundColor: 'var(--vscode-input-background)',
+              color: 'var(--vscode-input-foreground)',
+              fontSize: '13px'
+            }}
+          >
+            {allowedTypes.length > 0 ? (
+              <ul style={{ margin: '0', paddingLeft: '20px' }}>
+                {allowedTypes.map(type => (
+                  <li key={type} style={{ marginBottom: '4px' }}>
+                    {getComponentTypeName(type)}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div style={{ color: 'var(--vscode-descriptionForeground)' }}>
+                No resources can be contained
+              </div>
+            )}
+          </div>
+          {field.helpText && (
+            <div style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground)', marginTop: '3px' }}>
+              {field.helpText}
+            </div>
+          )}
+        </div>
+      );
+    }
+    
+    // Special case for contained resources list (placeholder)
+    if (field.key === 'containedResources') {
+      return (
+        <div className="form-group" key={field.key} style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', marginBottom: '5px' }}>{field.label}:</label>
+          <div
+            style={{
+              padding: '8px',
+              border: '1px solid var(--vscode-input-border)',
+              borderRadius: '4px',
+              backgroundColor: 'var(--vscode-editor-background)',
+              color: 'var(--vscode-descriptionForeground)',
+              fontSize: '13px',
+              minHeight: '80px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              textAlign: 'center'
+            }}
+          >
+            <p>Drag resources here to include them<br />(Feature coming soon)</p>
+          </div>
+          {field.helpText && (
+            <div style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground)', marginTop: '3px' }}>
+              {field.helpText}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // For other readonly fields
+    if (field.type === 'readonly') {
+      return (
+        <div className="form-group" key={field.key} style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', marginBottom: '5px' }}>{field.label}:</label>
+          <div
+            style={{
+              padding: '8px',
+              border: '1px solid var(--vscode-input-border)',
+              borderRadius: '4px',
+              backgroundColor: 'var(--vscode-input-background)',
+              color: 'var(--vscode-descriptionForeground)',
+              minHeight: '20px'
+            }}
+          >
+            {value || 'None'}
+          </div>
+          {field.helpText && (
+            <div style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground)', marginTop: '3px' }}>
+              {field.helpText}
+            </div>
+          )}
+        </div>
+      );
+    }
 
     switch (field.type) {
       case 'boolean':

@@ -1,4 +1,5 @@
 import { AwsComponent } from "./base/AwsComponent";
+import { AreaComponent } from "./base/AreaComponent";
 import { ComponentRelationship, RelationshipType } from "./ComponentRelationship";
 import { RegionComponent } from "./components/RegionComponent";
 import { AwsComponentRegistry } from "./ComponentRegistry";
@@ -20,99 +21,62 @@ export class DiagramModel {
     });
   }
   
-  // Add component to the region (or specified parent container)
-  addComponent(component: AwsComponent, parentId?: string): void {
-    if (!parentId) {
-      // Add to root region by default
-      this.region.addChild(component);
-      return;
-    }
+  // Add a component to the diagram, either to the region directly or to its appropriate area
+  addComponent(component: AwsComponent): void {
+    console.log(`[DEBUG] DiagramModel.addComponent - Adding component: ${component.id} (${component.type})`);
     
-    // Find the parent container
-    const findParent = (container: RegionComponent): boolean => {
-      if (container.id === parentId) {
-        container.addChild(component);
-        return true;
-      }
-      
-      // Search in children
-      for (const child of container.children) {
-        if (child instanceof RegionComponent) {
-          if (findParent(child)) {
-            return true;
-          }
-        }
-      }
-      
-      return false;
-    };
+    // Try to find an appropriate area for this component
+    const placedInArea = this.tryPlaceInArea(component);
     
-    if (!findParent(this.region)) {
-      console.error(`Parent container with ID ${parentId} not found`);
-      // Add to root region as fallback
+    if (!placedInArea) {
+      // If not placed in an area, add to region as default
+      console.log(`[DEBUG] DiagramModel.addComponent - Adding to region: ${component.id} (${component.type})`);
       this.region.addChild(component);
+    } else {
+      console.log(`[DEBUG] DiagramModel.addComponent - Placed in area: ${component.id} (${component.type})`);
     }
   }
   
-  // Remove component from the diagram
-  removeComponent(componentId: string): void {
-    // Remove from region/container
-    const removeFromContainer = (container: RegionComponent): boolean => {
-      // Check direct children
-      const index = container.children.findIndex(c => c.id === componentId);
-      if (index >= 0) {
-        container.children.splice(index, 1);
+  // Try to place a component in an appropriate area based on allowed children types
+  tryPlaceInArea(component: AwsComponent): boolean {
+    console.log(`[DEBUG] DiagramModel.tryPlaceInArea - Trying to place: ${component.id} (${component.type})`);
+    
+    // Get all area components
+    const areas = this.getAllAreaComponents();
+    console.log(`[DEBUG] DiagramModel.tryPlaceInArea - Found ${areas.length} area components`);
+    
+    // Find an area that can contain this component
+    for (const area of areas) {
+      console.log(`[DEBUG] DiagramModel.tryPlaceInArea - Checking area: ${area.id} (${area.type})`);
+      
+      if (area instanceof AreaComponent && area.canContain(component.type)) {
+        console.log(`[DEBUG] DiagramModel.tryPlaceInArea - Area ${area.id} can contain ${component.type}`);
+        area.addChild(component);
         return true;
+      } else if (area instanceof AreaComponent) {
+        console.log(`[DEBUG] DiagramModel.tryPlaceInArea - Area ${area.id} cannot contain ${component.type}`);
       }
-      
-      // Check in nested containers
-      for (const child of container.children) {
-        if (child instanceof RegionComponent) {
-          if (removeFromContainer(child)) {
-            return true;
-          }
-        }
-      }
-      
-      return false;
-    };
+    }
     
-    removeFromContainer(this.region);
-    
-    // Remove any relationships with this component
-    this.relationships = this.relationships.filter(
-      r => r.sourceId !== componentId && r.targetId !== componentId
+    console.log(`[DEBUG] DiagramModel.tryPlaceInArea - No suitable area found for: ${component.id} (${component.type})`);
+    return false;
+  }
+  
+  // Get all area components in the diagram
+  getAllAreaComponents(): AwsComponent[] {
+    const allComponents = [this.region, ...this.region.getAllChildren()];
+    return allComponents.filter(component => 
+      AwsComponentRegistry.isAreaType(component.type)
     );
   }
   
   // Find a component by ID
-  findComponentById(id: string): AwsComponent | null {
-    // Check if it's the region itself
+  findComponentById(id: string): AwsComponent | undefined {
     if (this.region.id === id) {
       return this.region;
     }
     
-    // Search in the region hierarchy
-    const findInContainer = (container: RegionComponent): AwsComponent | null => {
-      // Check direct children
-      for (const child of container.children) {
-        if (child.id === id) {
-          return child;
-        }
-        
-        // Recursively search in container children
-        if (child instanceof RegionComponent) {
-          const found = findInContainer(child);
-          if (found) {
-            return found;
-          }
-        }
-      }
-      
-      return null;
-    };
-    
-    return findInContainer(this.region);
+    return this.region.getAllChildren().find(c => c.id === id);
   }
   
   // Add a relationship between components
@@ -126,17 +90,74 @@ export class DiagramModel {
       return;
     }
     
+    // If this is a CONTAINS relationship and source is an area component,
+    // we should add the target as a child of the source area
+    if (type === RelationshipType.CONTAINS && sourceComponent instanceof AreaComponent) {
+      // First check if target is already in another area
+      const existingContainmentRel = this.relationships.find(r => 
+        r.type === RelationshipType.CONTAINS && r.targetId === targetId
+      );
+      
+      if (existingContainmentRel) {
+        // If it is, remove it from that area first
+        const existingArea = this.findComponentById(existingContainmentRel.sourceId);
+        if (existingArea instanceof AreaComponent) {
+          existingArea.removeChild(targetId);
+        }
+        
+        // Remove the existing relationship
+        this.relationships = this.relationships.filter(r => r.id !== existingContainmentRel.id);
+      }
+      
+      // Add target as child of source area if allowed
+      if (sourceComponent.canContain(targetComponent.type)) {
+        sourceComponent.addChild(targetComponent);
+      } else {
+        console.error(`${sourceComponent.type} cannot contain ${targetComponent.type}`);
+        return;
+      }
+    }
+    
     // Create and add the relationship
     const relationship = new ComponentRelationship(sourceId, targetId, type, label);
     this.relationships.push(relationship);
   }
   
-  // Remove a relationship
-  removeRelationship(relationshipId: string): void {
-    this.relationships = this.relationships.filter(r => r.id !== relationshipId);
+  // Remove a component and its relationships
+  removeComponent(componentId: string): void {
+    const component = this.findComponentById(componentId);
+    if (!component) {
+      return;
+    }
+    
+    // Remove component from its parent
+    if (this.region.id === componentId) {
+      // Cannot remove the region
+      return;
+    } else {
+      // Find all area components
+      const areas = this.getAllAreaComponents();
+      
+      // Remove from any area that contains it
+      areas.forEach(area => {
+        if (area instanceof AreaComponent) {
+          area.removeChild(componentId);
+        }
+      });
+    }
+    
+    // Remove relationships involving this component
+    this.relationships = this.relationships.filter(
+      r => r.sourceId !== componentId && r.targetId !== componentId
+    );
   }
   
-  // Convert to JSON for serialization
+  // Tostring representation
+  toString(): string {
+    return `Diagram: ${this.name} (${this.id})`;
+  }
+  
+  // Get serializable JSON representation
   toJSON(): object {
     return {
       id: this.id,

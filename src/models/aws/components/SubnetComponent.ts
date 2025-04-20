@@ -1,9 +1,10 @@
-import { ContainerComponent } from "../base/ContainerComponent";
+import { AreaComponent } from "../base/AreaComponent";
 
-export class SubnetComponent extends ContainerComponent {
+export class SubnetComponent extends AreaComponent {
   cidrBlock: string;
   availabilityZone: string;
   isPublic: boolean;
+  allowedChildTypes: string[] = ['EC2InstanceComponent', 'RDSInstanceComponent', 'LambdaFunctionComponent'];
   
   constructor(props: Partial<SubnetComponent> = {}) {
     super(props);

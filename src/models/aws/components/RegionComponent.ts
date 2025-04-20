@@ -1,8 +1,9 @@
-import { ContainerComponent } from "../base/ContainerComponent";
+import { AreaComponent } from "../base/AreaComponent";
 
-export class RegionComponent extends ContainerComponent {
+export class RegionComponent extends AreaComponent {
   regionName: string;
   availabilityZones: string[];
+  allowedChildTypes: string[] = ['VpcComponent', 'S3BucketComponent', 'RDSInstanceComponent', 'LambdaFunctionComponent'];
   
   constructor(props: Partial<RegionComponent> = {}) {
     super(props);

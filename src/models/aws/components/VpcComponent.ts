@@ -1,7 +1,8 @@
-import { ContainerComponent } from "../base/ContainerComponent";
+import { AreaComponent } from "../base/AreaComponent";
 
-export class VpcComponent extends ContainerComponent {
+export class VpcComponent extends AreaComponent {
   cidrBlock: string;
+  allowedChildTypes: string[] = ['SubnetComponent', 'SecurityGroupComponent', 'RouteTableComponent'];
   
   constructor(props: Partial<VpcComponent> = {}) {
     super(props);
@@ -26,7 +27,10 @@ export class VpcComponent extends ContainerComponent {
     });
     
     // Restore children if they exist
-    // Placeholder as with RegionComponent
+    if (json.children && Array.isArray(json.children)) {
+      // This would need a component registry to properly restore children
+      // For now, we'll leave this as a placeholder
+    }
     
     return vpc;
   }
