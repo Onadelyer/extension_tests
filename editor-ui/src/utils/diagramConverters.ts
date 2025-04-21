@@ -32,10 +32,9 @@ export const diagramToReactFlow = (diagram: DiagramData): { nodes: Node[], edges
     draggable: true  // Add this explicitly
   });
 
-  // Add child components as nodes
-  console.log('[DEBUG] diagramToReactFlow - Processing', diagram.region.children.length, 'children');
-  diagram.region.children.forEach((component, index) => {
-    console.log(`[DEBUG] diagramToReactFlow - Processing child ${index}:`, component);
+  // Helper function to process component and its children recursively
+  const processComponent = (component: AwsComponentData) => {
+    console.log(`[DEBUG] diagramToReactFlow - Processing component: ${component.type} (${component.id})`);
     
     // Ensure area components have appropriate size
     if (areaComponentTypes.includes(component.type) && (!component.size || component.size.width < 200)) {
@@ -61,7 +60,17 @@ export const diagramToReactFlow = (diagram: DiagramData): { nodes: Node[], edges
     
     console.log(`[DEBUG] diagramToReactFlow - Created node for ${component.type}:`, node);
     nodes.push(node);
-  });
+
+    // Recursively process children if they exist
+    if (component.children && Array.isArray(component.children) && component.children.length > 0) {
+      console.log(`[DEBUG] diagramToReactFlow - Processing ${component.children.length} children of ${component.id}`);
+      component.children.forEach(child => processComponent(child));
+    }
+  };
+
+  // Add child components as nodes
+  console.log('[DEBUG] diagramToReactFlow - Processing', diagram.region.children.length, 'children');
+  diagram.region.children.forEach(component => processComponent(component));
   
   // Add relationships as edges
   console.log('[DEBUG] diagramToReactFlow - Processing', diagram.relationships.length, 'relationships');
