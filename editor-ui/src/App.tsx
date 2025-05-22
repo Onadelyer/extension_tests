@@ -32,7 +32,6 @@ function App() {
         setLoading(false);
       }
     } catch (err) {
-      ('No saved state found');
     }
 
     // Listen for messages from the extension

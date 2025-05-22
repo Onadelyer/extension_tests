@@ -63,9 +63,7 @@ export class TerraformResourceParser {
   ): Promise<TerraformResource[]> {
     const resources: TerraformResource[] = [];
     const resourceTypes = config.resourceMappings.map(m => m.terraformType);
-    
-    (`Parsing ${filePaths.length} files for resource types:`, resourceTypes);
-    
+        
     for (const filePath of filePaths) {
       try {
         // Read file content
@@ -122,11 +120,9 @@ export class TerraformResourceParser {
     resourceTypes: string[]
   ): TerraformResource[] {
     const resources: TerraformResource[] = [];
-    (`Parsing HCL from ${filePath}, looking for resource types:`, resourceTypes);
     
     // Handle managed resources (newer parser format)
     if (parsedHCL.managed_resources) {
-      (`Found managed_resources in ${filePath}:`, Object.keys(parsedHCL.managed_resources));
       
       for (const [resourceType, resourcesOfType] of Object.entries(parsedHCL.managed_resources)) {
         (`Resource type: ${resourceType}, Included: ${resourceTypes.includes(resourceType)}`);
@@ -477,7 +473,6 @@ export class TerraformResourceParser {
       resourcesByType[r.type] = (resourcesByType[r.type] || 0) + 1;
     });
     
-    ("Resources by type before filtering:", resourcesByType);
     
     const filtered = resources.filter(resource => {
       // Find the matching resource mapping
@@ -511,14 +506,8 @@ export class TerraformResourceParser {
       }
       
       // Resource passed all filters
-      (`Including resource ${resource.id} with attributes:`, resource.attributes);
       return true;
     });
-    
-    if (filtered.length === 0 && resources.length > 0) {
-      ("All resources were filtered out. Filtered out by type:", filteredOutByType);
-      ("Check your mapping configuration against these resource types:", Object.keys(resourcesByType));
-    }
     
     return filtered;
   }
