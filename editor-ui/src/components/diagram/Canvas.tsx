@@ -42,7 +42,8 @@ const DiagramCanvas: React.FC = () => {
     addNode,
     removeNode,
     addEdge,
-    removeEdge
+    removeEdge,
+    setNodes
   } = useDiagramStore();
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -51,43 +52,33 @@ const DiagramCanvas: React.FC = () => {
   // Handle node changes (position, selection, deletion)
   const onNodesChange: OnNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      // Handle different types of node changes
+      // Apply changes directly to nodes array to ensure real-time updates during dragging
+      const updatedNodes = applyNodeChanges(changes, nodes);
+      setNodes(updatedNodes);
+      
+      // Handle different types of node changes for additional state updates
       changes.forEach(change => {
         switch (change.type) {
           case 'position':
-            if (change.dragging && change.position) {
-              // Update our local tracking of positions during drag
-              setNodePositions(prev => ({
-                ...prev,
-                [change.id]: change.position!
-              }));
-            } else if (change.dragging === false) {
-              // When dragging ends, use our locally tracked position
-              const finalPosition = nodePositions[change.id];
-              
-              if (finalPosition) {                
-                // Update the node in our store
-                updateNode(change.id, { position: finalPosition });
-                
-                // Also update node data to keep everything in sync
-                updateNode(change.id, { 
-                  data: { position: finalPosition }
-                });
-                
-                // Clear the tracked position
-                setNodePositions(prev => {
-                  const newState = { ...prev };
-                  delete newState[change.id];
-                  return newState;
-                });
-              }
+            if (change.dragging === false && change.position) {
+              // When dragging ends, update the node data to keep everything in sync
+              updateNode(change.id, { 
+                data: { position: change.position }
+              });
             }
             break;
           case 'select':
+            // Force selection to update the store
             if (change.selected) {
-              selectNode(change.id);
-            } else {
-              deselectAll();
+              // Slight delay to ensure selection works even with click events
+              setTimeout(() => {
+                selectNode(change.id);
+              }, 0);
+            } else if (!changes.some(c => c.type === 'select' && c.selected)) {
+              // Only deselect if there are no other nodes being selected
+              setTimeout(() => {
+                deselectAll();
+              }, 0);
             }
             break;
           case 'remove':
@@ -96,12 +87,20 @@ const DiagramCanvas: React.FC = () => {
         }
       });
     },
-    [updateNode, selectNode, deselectAll, removeNode, nodePositions]
+    [nodes, setNodes, updateNode, selectNode, deselectAll, removeNode]
   );
 
   // Handle edge changes
   const onEdgesChange: OnEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
+      // Apply changes directly to edges array
+      const updatedEdges = applyEdgeChanges(changes, edges);
+      // Update the edges in our store
+      if (JSON.stringify(updatedEdges) !== JSON.stringify(edges)) {
+        // Only update if there are actual changes
+        setNodes(nodes, updatedEdges);
+      }
+      
       // Handle edge deletion
       changes.forEach(change => {
         if (change.type === 'remove') {
@@ -109,7 +108,7 @@ const DiagramCanvas: React.FC = () => {
         }
       });
     },
-    [removeEdge]
+    [edges, nodes, setNodes, removeEdge]
   );
 
   // Handle connecting nodes
@@ -174,7 +173,9 @@ const DiagramCanvas: React.FC = () => {
         edgeTypes={edgeTypes}
         draggable={true}
         nodesDraggable={true}
-        selectNodesOnDrag={true}
+        elementsSelectable={true}
+        selectNodesOnDrag={false}
+        onClick={() => deselectAll()} // Deselect when clicking on empty canvas
         fitView
         snapToGrid
         snapGrid={[20, 20]}

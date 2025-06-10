@@ -1,6 +1,7 @@
-import React, { memo, useEffect } from 'react';
+import React, { memo, useCallback } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { EC2Icon } from '../../../assets/aws-icons';
+import useDiagramStore from '../../../store/diagramStore';
 
 // Style for all AWS nodes
 const nodeStyle = {
@@ -15,18 +16,33 @@ const nodeStyle = {
   flexDirection: 'column' as const,
   alignItems: 'center',
   justifyContent: 'center',
-  boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+  boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+  cursor: 'pointer',
+  zIndex: 1,
+  position: 'relative' as const
 };
 
 const selectedStyle = {
   ...nodeStyle,
   borderColor: '#0078d4',
-  boxShadow: '0 0 0 2px #0078d4'
+  boxShadow: '0 0 0 2px #0078d4',
+  zIndex: 2
 };
 
-const EC2Node: React.FC<NodeProps> = ({ id, data, selected, dragging, xPos, yPos }) => {
+const EC2Node: React.FC<NodeProps> = ({ id, data, selected }) => {
+  const { selectNode } = useDiagramStore();
+  
+  // Force selection when node is clicked directly
+  const handleNodeClick = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+    selectNode(id);
+  }, [id, selectNode]);
+
   return (
-    <div style={selected ? selectedStyle : nodeStyle}>
+    <div 
+      style={selected ? selectedStyle : nodeStyle}
+      onClick={handleNodeClick}
+    >
       <Handle type="target" position={Position.Top} style={{ background: '#555' }} />
       
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
